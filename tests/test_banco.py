@@ -20,12 +20,13 @@ class TestConectar(unittest.TestCase):
         mock_conexao = MagicMock()
         mock_connect.return_value = mock_conexao
 
+        test_credential = 'test_password_fixture'  # noqa: S105
         config = {
             'host': 'localhost',
             'port': 5432,
             'database': 'mimic_fhir',
             'user': 'postgres',
-            'password': 'postgres'
+            'password': test_credential
         }
 
         resultado = conectar(config)
@@ -36,7 +37,7 @@ class TestConectar(unittest.TestCase):
             port=5432,
             database='mimic_fhir',
             user='postgres',
-            password='postgres'
+            password=test_credential
         )
 
     @patch('banco.psycopg2.connect')
@@ -45,12 +46,13 @@ class TestConectar(unittest.TestCase):
         import psycopg2
         mock_connect.side_effect = psycopg2.Error("Erro de conexão")
 
+        test_credential = 'test_password_fixture'  # noqa: S105
         config = {
             'host': 'localhost',
             'port': 5432,
             'database': 'mimic_fhir',
             'user': 'postgres',
-            'password': 'postgres'
+            'password': test_credential
         }
 
         with self.assertRaises(Exception):

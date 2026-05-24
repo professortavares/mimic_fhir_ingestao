@@ -39,7 +39,7 @@ def obter_configuracao_banco():
     - POSTGRES_PORT: porta (padrão: 5432)
     - POSTGRES_DB: nome do banco (padrão: mimic_fhir)
     - POSTGRES_USER: usuário (padrão: postgres)
-    - POSTGRES_PASSWORD: senha (padrão: postgres)
+    - POSTGRES_PASSWORD: senha (obrigatória)
 
     Returns:
         dict: Configuração do banco com as chaves esperadas por banco.conectar().
@@ -49,7 +49,7 @@ def obter_configuracao_banco():
         'port': int(os.getenv('POSTGRES_PORT', '5432')),
         'database': os.getenv('POSTGRES_DB', 'mimic_fhir'),
         'user': os.getenv('POSTGRES_USER', 'postgres'),
-        'password': os.getenv('POSTGRES_PASSWORD', 'postgres')
+        'password': os.getenv('POSTGRES_PASSWORD')
     }
 
 
