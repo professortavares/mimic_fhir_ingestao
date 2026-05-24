@@ -5,7 +5,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY leitor.py banco.py ingestao.py ./
+COPY src/ ./src/
 COPY tests/ ./tests/
+COPY conftest.py entry_point.sh ./
+RUN chmod +x entry_point.sh
 
-CMD ["python", "ingestao.py"]
+ENV PYTHONPATH=/app/src
+
+CMD ["./entry_point.sh"]

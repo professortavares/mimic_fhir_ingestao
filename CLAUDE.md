@@ -12,7 +12,20 @@ The entire system runs in Docker with automatic ingestion on container startup.
 
 ## Architecture
 
-### Core Modules
+### Project Structure
+
+```
+src/                      # Application modules
+├── leitor.py              # File reading and FHIR field extraction
+├── banco.py               # PostgreSQL operations
+└── ingestao.py            # Main orchestrator
+
+conftest.py               # pytest configuration (adds src/ to path)
+entry_point.sh            # Docker container entry point
+tests/                    # Test suite (unchanged imports due to conftest.py)
+```
+
+### Core Modules (in `src/`)
 
 - **leitor.py** — Reads NDJSON.gz files and extracts FHIR records
   - `extrair_campos(registro)` — Validates and extracts `id`, `name` from Organization
@@ -55,41 +68,45 @@ MimicLocation.ndjson.gz → leitor.ler_localizacoes() → dict[id, nome, organiz
 
 ### Containerization
 
-- **Dockerfile** — Python 3.11-slim, copies code + tests (not data), runs `ingestao.py` as CMD
-- **docker-compose.yml** — Defines postgres + app services
-  - postgres: PostgreSQL 15, healthcheck via `pg_isready`
-  - app: depends_on postgres with `condition: service_healthy`, mounts `./data` volume, reads `.env` for config
-  - Data files (`*.gz`) are mounted at runtime, not copied into image (allows data updates without rebuild)
+- **Dockerfile** — Python 3.11-slim, copies `src/`, `tests/`, `conftest.py`, `entry_point.sh`
+  - Sets `PYTHONPATH=/app/src` so modules can be imported directly
+  - Runs `entry_point.sh` as CMD (bash script that loads `.env` and calls `python src/ingestao.py`)
+  - Does NOT copy `data/` (files are mounted at runtime)
+
+- **docker-compose.yml** — Simplified to just the app service
+  - No postgres service (uses external PostgreSQL configured via `.env`)
+  - Mounts `./data:/app/data` for input files
+  - Uses `env_file: .env` to load configuration
+
+- **entry_point.sh** — Bash script entry point
+  - Loads `.env` if present (useful for local execution outside Docker)
+  - Calls `python src/ingestao.py`
 
 ## Common Development Tasks
 
 ### Run Ingestion (Local)
 ```bash
 source venv/bin/activate
-python ingestao.py
+./entry_point.sh
 ```
-Requires PostgreSQL running on localhost:5432 with credentials from `.env`
+Requires PostgreSQL running with credentials from `.env` and data files in `./data/`
 
 ### Run Ingestion (Docker)
 ```bash
 docker compose up --build
 ```
-Starts both PostgreSQL and app; app exits when done. Logs appear in stdout.
+Builds image, starts container, runs ingestion, exits. App connects to PostgreSQL configured in `.env`.
 
 ### Run Tests (Local)
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -v
 ```
+Uses `conftest.py` to add `src/` to path; no manual PYTHONPATH needed.
 
 ### Run Tests (Docker)
 ```bash
 docker compose run --rm app python -m pytest tests/ -v
-```
-
-### Verify Data in Database
-```bash
-docker compose exec postgres psql -U postgres -d mimic_fhir -c "SELECT * FROM organizacoes;"
 ```
 
 ### Set Up Local Development
@@ -98,27 +115,31 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with PostgreSQL credentials
+# Edit .env with your PostgreSQL credentials
 ```
 
-### Stop & Clean Up
+### Stop Container
 ```bash
-docker compose down          # Stop containers, keep volumes
-docker compose down -v       # Stop containers, remove volumes (data)
+docker compose down
 ```
 
 ## Testing Notes
 
-- **tests/test_leitor.py** — 13 tests covering Organization and Location extraction, file reading, error handling
+- **tests/test_leitor.py** — 14 tests covering Organization and Location extraction
+  - Uses `conftest.py` to ensure `from leitor import ...` works without manual path setup
   - Tests missing fields, invalid JSON, empty files, FK extraction from `managingOrganization.reference`
   - Uses temporary gzip files to simulate real NDJSON.gz
-  - All critical logic tested
 
-- **tests/test_banco.py** — 8 tests using `unittest.mock.MagicMock` to simulate psycopg2
-  - No real database needed
-  - Verifies SQL and connection flow for both tables, including FK constraints
+- **tests/test_banco.py** — 13 tests using `unittest.mock.MagicMock` to simulate psycopg2
+  - Uses `conftest.py` to ensure `from banco import ...` works
+  - No real database needed; verifies SQL and connection flow for both tables
 
-**Total: 24 tests pass locally and in Docker.**
+**Total: 27 tests pass locally and in Docker.**
+
+### conftest.py
+- Automatically executed by pytest
+- Adds `src/` to `sys.path` so test imports (`from leitor import ...`) work without modification
+- Essential for development flow where modules moved to `src/` but tests stay in `tests/`
 
 ## Code Conventions
 
@@ -130,11 +151,19 @@ docker compose down -v       # Stop containers, remove volumes (data)
 
 ## Configuration via Environment Variables
 
-See `.env.example`:
-- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
-- `LOG_LEVEL` (default: INFO)
-- `CAMINHO_ARQUIVO` (default: ./data/MimicOrganization.ndjson.gz)
-- `CAMINHO_ARQUIVO_LOCATION` (default: ./data/MimicLocation.ndjson.gz)
+See `.env.example` (values are placeholders; replace with your PostgreSQL connection details):
+- `POSTGRES_HOST` — PostgreSQL server address
+- `POSTGRES_PORT` — PostgreSQL port (default 5432)
+- `POSTGRES_DB` — Database name
+- `POSTGRES_USER` — Database user
+- `POSTGRES_PASSWORD` — Database password
+- `LOG_LEVEL` — Log level (default: INFO)
+- `CAMINHO_ARQUIVO` — Path to MimicOrganization file (default: ./data/MimicOrganization.ndjson.gz)
+- `CAMINHO_ARQUIVO_LOCATION` — Path to MimicLocation file (default: ./data/MimicLocation.ndjson.gz)
+
+### Docker Execution
+- docker-compose uses `env_file: .env` to load variables
+- entry_point.sh loads `.env` before running `python src/ingestao.py`
 
 ## Key Constraints & Patterns
 

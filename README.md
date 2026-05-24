@@ -22,22 +22,22 @@ Clone ou navegue até o diretório do projeto:
 cd mimic_fhir_ingestao
 ```
 
-### 2. Configurar variáveis de ambiente (opcional)
+### 2. Configurar variáveis de ambiente
 
-Copie o arquivo `.env.example` para `.env` e ajuste as configurações conforme necessário:
+Copie o arquivo `.env.example` para `.env` e configure com os valores do seu PostgreSQL externo:
 
 ```bash
 cp .env.example .env
 ```
 
-O arquivo `.env.example` contém:
+Edite `.env` com suas credenciais do banco:
 
 ```env
-POSTGRES_HOST=postgres
+POSTGRES_HOST=seu_host
 POSTGRES_PORT=5432
-POSTGRES_DB=mimic_fhir
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
+POSTGRES_DB=seu_banco
+POSTGRES_USER=seu_usuario
+POSTGRES_PASSWORD=sua_senha
 LOG_LEVEL=INFO
 CAMINHO_ARQUIVO=./data/MimicOrganization.ndjson.gz
 CAMINHO_ARQUIVO_LOCATION=./data/MimicLocation.ndjson.gz
@@ -45,17 +45,17 @@ CAMINHO_ARQUIVO_LOCATION=./data/MimicLocation.ndjson.gz
 
 ### 3. Executar a ingestão
 
-Inicie os serviços com Docker Compose:
+Inicie a aplicação com Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
 O comando acima:
-- Inicia o serviço PostgreSQL
-- Aguarda o PostgreSQL estar pronto (healthcheck)
-- Constrói e executa o container da aplicação
-- Realiza a ingestão automaticamente
+- Lê as configurações do arquivo `.env`
+- Constrói a imagem Docker
+- Executa o container da aplicação
+- Realiza a ingestão no PostgreSQL externo configurado
 
 Você verá logs como:
 
@@ -69,64 +69,22 @@ mimic_fhir_app | 2026-05-23 10:30:45,789 - leitor - INFO - Localização 1 lida 
 mimic_fhir_app | 2026-05-23 10:30:46,012 - ingestao - INFO - Ingestão de dados MIMIC FHIR concluída com sucesso
 ```
 
-### 4. Verificar dados importados
+### 4. Executar testes
 
-Em outro terminal, execute para verificar organizações:
-
-```bash
-docker compose exec postgres psql -U postgres -d mimic_fhir -c "SELECT * FROM organizacoes;"
-```
-
-Resultado esperado:
-
-```
-                  id                  |                    nome
---------------------------------------+---------------------------------------------
- ee172322-118b-5716-abbc-18e4c5437e15 | Beth Israel Deaconess Medical Center
-(1 row)
-```
-
-Para verificar localizações:
+Para rodar os testes unitários (localmente):
 
 ```bash
-docker compose exec postgres psql -U postgres -d mimic_fhir -c "SELECT COUNT(*) FROM localizacoes;"
+source venv/bin/activate
+python -m pytest tests/ -v
 ```
 
-Resultado esperado:
-
-```
- count
--------
-    31
-(1 row)
-```
-
-Para ver a relação entre localizações e organizações:
-
-```bash
-docker compose exec postgres psql -U postgres -d mimic_fhir -c "SELECT l.nome, o.nome FROM localizacoes l JOIN organizacoes o ON l.organizacao_id = o.id LIMIT 3;"
-```
-
-Resultado esperado:
-
-```
-                        nome                        |                    nome
-----------------------------------------------------+---------------------------------------------
- Cardiology Surgery Intermediate                    | Beth Israel Deaconess Medical Center
- Emergency Department                               | Beth Israel Deaconess Medical Center
- Intensive Care Unit                                | Beth Israel Deaconess Medical Center
-(3 rows)
-```
-
-### 5. Executar testes
-
-Para rodar os testes unitários:
+Ou via Docker:
 
 ```bash
 docker compose run --rm app python -m pytest tests/ -v
 ```
 
-Saída esperada (24 testes ao total):
+Saída esperada (27 testes ao total):
 
 ```
 tests/test_leitor.py::TestExtrairCampos::test_extrair_campos_sucesso PASSED
@@ -158,35 +116,32 @@ tests/test_banco.py::TestInserirLocalizacoes::test_inserir_localizacoes_vazio PA
 tests/test_banco.py::TestInserirLocalizacoes::test_inserir_localizacoes_com_fk PASSED
 ```
 
-## Parar os serviços
+## Parar o serviço
 
-Para parar e remover os containers:
+Para parar e remover o container:
 
 ```bash
 docker compose down
-```
-
-Para remover também os volumes (dados do PostgreSQL):
-
-```bash
-docker compose down -v
 ```
 
 ## Estrutura do Projeto
 
 ```
 mimic_fhir_ingestao/
-├── leitor.py              # Módulo para leitura de NDJSON.gz
-├── banco.py               # Módulo para operações com PostgreSQL
-├── ingestao.py            # Script principal de ingestão
+├── src/                   # Módulos Python da aplicação
+│   ├── leitor.py          # Módulo para leitura de NDJSON.gz
+│   ├── banco.py           # Módulo para operações com PostgreSQL
+│   └── ingestao.py        # Script principal de ingestão
+├── tests/                 # Testes da aplicação
+│   ├── test_leitor.py     # Testes do módulo leitor
+│   └── test_banco.py      # Testes do módulo banco
+├── conftest.py            # Configuração de testes (adiciona src ao path)
+├── entry_point.sh         # Script de entrada do container
 ├── requirements.txt       # Dependências Python
 ├── Dockerfile             # Definição de imagem Docker
 ├── docker-compose.yml     # Orquestração de containers
 ├── .env.example           # Exemplo de variáveis de ambiente
-├── README.md              # Este arquivo
-└── tests/
-    ├── test_leitor.py     # Testes do módulo leitor
-    └── test_banco.py      # Testes do módulo banco
+└── README.md              # Este arquivo
 ```
 
 ## Módulos
@@ -282,14 +237,6 @@ Campos extraídos: `id`, `name`, e `organizacao_id` (extraído de `managingOrgan
 
 ## Troubleshooting
 
-### O app trava esperando o PostgreSQL
-
-Isso é normal. O `healthcheck` aguarda até 50 segundos (5 tentativas × 10s). Se continuar, verifique:
-
-```bash
-docker compose logs postgres
-```
-
 ### Erro "arquivo não encontrado"
 
 Certifique-se de que ambos os arquivos existem em `./data/`:
@@ -306,7 +253,20 @@ Note: os arquivos `.gz` são ignorados pelo git (`.gitignore`) e precisam estar 
 
 ### Erro de conexão com PostgreSQL
 
-Verifique as variáveis de ambiente em `.env` e confirme que os valores correspondem aos definidos em `docker-compose.yml`.
+Verifique o arquivo `.env` e confirme que as variáveis de conexão apontam para um PostgreSQL válido:
+- `POSTGRES_HOST`: IP ou hostname do servidor PostgreSQL
+- `POSTGRES_PORT`: Porta (padrão 5432)
+- `POSTGRES_DB`: Nome do banco de dados
+- `POSTGRES_USER`: Usuário de acesso
+- `POSTGRES_PASSWORD`: Senha de acesso
+
+### Como debugar
+
+Para ver os logs da aplicação:
+
+```bash
+docker compose logs app
+```
 
 ## Desenvolvedor
 
