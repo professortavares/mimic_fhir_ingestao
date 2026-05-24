@@ -6,7 +6,12 @@ import json
 import tempfile
 import unittest
 from unittest.mock import patch
-from leitor import extrair_campos, ler_registros
+from leitor import (
+    extrair_campos,
+    ler_registros,
+    extrair_campos_location,
+    ler_localizacoes
+)
 
 
 class TestExtrairCampos(unittest.TestCase):
@@ -144,6 +149,164 @@ class TestLerRegistros(unittest.TestCase):
             try:
                 resultado = ler_registros(tmp.name)
                 self.assertEqual(len(resultado), 0)
+
+            finally:
+                import os
+                os.unlink(tmp.name)
+
+
+class TestExtrairCamposLocation(unittest.TestCase):
+    """Testes para a função extrair_campos_location."""
+
+    def test_extrair_campos_location_sucesso(self):
+        """Testa extração com dict válido contendo id, name e managingOrganization."""
+        registro = {
+            'id': 'ecbf468a-22ec-5320-8e11-6ebcc918dad5',
+            'name': 'Cardiology Surgery Intermediate',
+            'resourceType': 'Location',
+            'status': 'active',
+            'managingOrganization': {
+                'reference': 'Organization/ee172322-118b-5716-abbc-18e4c5437e15'
+            }
+        }
+
+        resultado = extrair_campos_location(registro)
+
+        self.assertEqual(resultado['id'], 'ecbf468a-22ec-5320-8e11-6ebcc918dad5')
+        self.assertEqual(resultado['nome'], 'Cardiology Surgery Intermediate')
+        self.assertEqual(resultado['organizacao_id'], 'ee172322-118b-5716-abbc-18e4c5437e15')
+
+    def test_extrair_campos_location_sem_managing_org(self):
+        """Testa que ValueError é levantado se managingOrganization está ausente."""
+        registro = {
+            'id': '123',
+            'name': 'Localização A'
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_location(registro)
+
+        self.assertIn('managingOrganization', str(contexto.exception))
+
+    def test_extrair_campos_location_sem_id(self):
+        """Testa que ValueError é levantado se 'id' está ausente."""
+        registro = {
+            'name': 'Localização A',
+            'managingOrganization': {'reference': 'Organization/123'}
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_location(registro)
+
+        self.assertIn('id', str(contexto.exception))
+
+    def test_extrair_campos_location_sem_nome(self):
+        """Testa que ValueError é levantado se 'name' está ausente."""
+        registro = {
+            'id': '123',
+            'managingOrganization': {'reference': 'Organization/456'}
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_location(registro)
+
+        self.assertIn('name', str(contexto.exception))
+
+    def test_extrair_campos_location_reference_invalida(self):
+        """Testa que ValueError é levantado se reference está vazia."""
+        registro = {
+            'id': '123',
+            'name': 'Localização A',
+            'managingOrganization': {'reference': ''}
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_location(registro)
+
+        self.assertIn('reference', str(contexto.exception).lower())
+
+    def test_extrair_campos_location_extrai_uuid_corretamente(self):
+        """Testa que o UUID é extraído corretamente da reference."""
+        registro = {
+            'id': 'local-1',
+            'name': 'Test Location',
+            'managingOrganization': {
+                'reference': 'Organization/org-uuid-12345'
+            }
+        }
+
+        resultado = extrair_campos_location(registro)
+
+        self.assertEqual(resultado['organizacao_id'], 'org-uuid-12345')
+
+
+class TestLerLocalizacoes(unittest.TestCase):
+    """Testes para a função ler_localizacoes."""
+
+    def test_ler_localizacoes_sucesso(self):
+        """Testa leitura bem-sucedida de arquivo NDJSON.gz de localizações."""
+        dados = [
+            {
+                'id': 'loc-1',
+                'name': 'Cardiology',
+                'managingOrganization': {'reference': 'Organization/org-1'}
+            },
+            {
+                'id': 'loc-2',
+                'name': 'Emergency',
+                'managingOrganization': {'reference': 'Organization/org-1'}
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.ndjson.gz', delete=False) as tmp:
+            with gzip.open(tmp.name, 'wt', encoding='utf-8') as gz:
+                for registro in dados:
+                    gz.write(json.dumps(registro) + '\n')
+
+            try:
+                resultado = ler_localizacoes(tmp.name)
+
+                self.assertEqual(len(resultado), 2)
+                self.assertEqual(resultado[0]['id'], 'loc-1')
+                self.assertEqual(resultado[0]['nome'], 'Cardiology')
+                self.assertEqual(resultado[0]['organizacao_id'], 'org-1')
+                self.assertEqual(resultado[1]['id'], 'loc-2')
+
+            finally:
+                import os
+                os.unlink(tmp.name)
+
+    def test_ler_localizacoes_arquivo_nao_encontrado(self):
+        """Testa que FileNotFoundError é levantado para arquivo inexistente."""
+        with self.assertRaises(FileNotFoundError):
+            ler_localizacoes('/arquivo/inexistente.gz')
+
+    def test_ler_localizacoes_campos_ausentes(self):
+        """Testa que registros com campos ausentes são ignorados."""
+        dados = [
+            {
+                'id': 'loc-1',
+                'name': 'Localização A',
+                'managingOrganization': {'reference': 'Organization/org-1'}
+            },
+            {
+                'id': 'loc-2',
+                'name': 'Localização B'
+                # sem managingOrganization
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.ndjson.gz', delete=False) as tmp:
+            with gzip.open(tmp.name, 'wt', encoding='utf-8') as gz:
+                for registro in dados:
+                    gz.write(json.dumps(registro) + '\n')
+
+            try:
+                resultado = ler_localizacoes(tmp.name)
+
+                # Apenas o primeiro registro deve estar na lista
+                self.assertEqual(len(resultado), 1)
+                self.assertEqual(resultado[0]['id'], 'loc-1')
 
             finally:
                 import os

@@ -4,8 +4,14 @@ import logging
 import os
 import sys
 
-from leitor import ler_registros
-from banco import conectar, criar_tabela, inserir_organizacoes
+from leitor import ler_registros, ler_localizacoes
+from banco import (
+    conectar,
+    criar_tabela,
+    inserir_organizacoes,
+    criar_tabela_localizacoes,
+    inserir_localizacoes
+)
 
 
 def configurar_logging(nivel='INFO'):
@@ -53,9 +59,9 @@ def main():
     1. Configura logging
     2. Lê variáveis de ambiente
     3. Conecta ao banco
-    4. Cria tabela (se necessário)
-    5. Lê arquivo NDJSON.gz
-    6. Insere registros no banco
+    4. Cria tabelas (organizacoes e localizacoes)
+    5. Lê e insere registros de organizações
+    6. Lê e insere registros de localizações
     """
     log_level = os.getenv('LOG_LEVEL', 'INFO')
     configurar_logging(log_level)
@@ -63,40 +69,53 @@ def main():
     logger = logging.getLogger(__name__)
     logger.info("Iniciando ingestão de dados MIMIC FHIR")
 
-    caminho_arquivo = os.getenv(
+    caminho_arquivo_org = os.getenv(
         'CAMINHO_ARQUIVO',
         './data/MimicOrganization.ndjson.gz'
     )
+    caminho_arquivo_loc = os.getenv(
+        'CAMINHO_ARQUIVO_LOCATION',
+        './data/MimicLocation.ndjson.gz'
+    )
+
+    config_banco = obter_configuracao_banco()
+    conexao = None
 
     try:
-        # Lê registros do arquivo
-        logger.info(f"Lendo arquivo: {caminho_arquivo}")
-        registros = ler_registros(caminho_arquivo)
-
-        if not registros:
-            logger.warning("Nenhum registro válido encontrado no arquivo")
-            logger.info("Ingestão concluída sem registros")
-            return
-
         # Conecta ao banco
-        config_banco = obter_configuracao_banco()
         conexao = conectar(config_banco)
 
-        try:
-            # Cria tabela
-            criar_tabela(conexao)
+        # Cria tabelas
+        criar_tabela(conexao)
+        criar_tabela_localizacoes(conexao)
 
-            # Insere registros
-            total_inserido = inserir_organizacoes(conexao, registros)
+        # Ingestão de Organizações
+        logger.info(f"Lendo arquivo de organizações: {caminho_arquivo_org}")
+        registros_org = ler_registros(caminho_arquivo_org)
 
+        if registros_org:
+            total_org = inserir_organizacoes(conexao, registros_org)
             logger.info(
-                f"Ingestão concluída com sucesso: "
-                f"{total_inserido} registros processados"
+                f"Organizações ingeridas com sucesso: "
+                f"{total_org} registros processados"
             )
+        else:
+            logger.warning("Nenhum registro de organização válido encontrado")
 
-        finally:
-            conexao.close()
-            logger.info("Conexão com banco fechada")
+        # Ingestão de Localizações
+        logger.info(f"Lendo arquivo de localizações: {caminho_arquivo_loc}")
+        registros_loc = ler_localizacoes(caminho_arquivo_loc)
+
+        if registros_loc:
+            total_loc = inserir_localizacoes(conexao, registros_loc)
+            logger.info(
+                f"Localizações ingeridas com sucesso: "
+                f"{total_loc} registros processados"
+            )
+        else:
+            logger.warning("Nenhum registro de localização válido encontrado")
+
+        logger.info("Ingestão de dados MIMIC FHIR concluída com sucesso")
 
     except FileNotFoundError as e:
         logger.error(f"Arquivo não encontrado: {e}")
@@ -105,6 +124,11 @@ def main():
     except Exception as e:
         logger.error(f"Erro durante ingestão: {e}")
         sys.exit(1)
+
+    finally:
+        if conexao:
+            conexao.close()
+            logger.info("Conexão com banco fechada")
 
 
 if __name__ == '__main__':

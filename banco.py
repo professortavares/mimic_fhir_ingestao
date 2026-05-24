@@ -127,3 +127,102 @@ def inserir_organizacoes(conexao, registros):
         cursor.close()
 
     return contador
+
+
+def criar_tabela_localizacoes(conexao):
+    """
+    Cria tabela 'localizacoes' se não existir.
+
+    A tabela possui colunas:
+    - id: VARCHAR(255), chave primária
+    - nome: TEXT, obrigatório
+    - organizacao_id: VARCHAR(255), chave estrangeira referenciando organizacoes
+
+    Args:
+        conexao (psycopg2.connection): Conexão com o banco.
+
+    Raises:
+        psycopg2.Error: Se o comando SQL falhar.
+    """
+    sql = """
+    CREATE TABLE IF NOT EXISTS localizacoes (
+        id VARCHAR(255) PRIMARY KEY,
+        nome TEXT NOT NULL,
+        organizacao_id VARCHAR(255) REFERENCES organizacoes(id)
+    )
+    """
+
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(sql)
+        conexao.commit()
+        logger.info("Tabela 'localizacoes' criada ou já existe")
+
+    except psycopg2.Error as e:
+        logger.error(f"Erro ao criar tabela: {e}")
+        conexao.rollback()
+        raise
+
+    finally:
+        cursor.close()
+
+
+def inserir_localizacoes(conexao, registros):
+    """
+    Insere registros de localizações na tabela.
+
+    Usa INSERT ... ON CONFLICT para garantir idempotência:
+    se um registro com mesmo 'id' já existe, é ignorado.
+
+    Args:
+        conexao (psycopg2.connection): Conexão com o banco.
+        registros (list): Lista de dicionários com 'id', 'nome', 'organizacao_id'.
+
+    Returns:
+        int: Número de registros processados.
+
+    Raises:
+        psycopg2.Error: Se algum INSERT falhar.
+    """
+    sql = """
+    INSERT INTO localizacoes (id, nome, organizacao_id)
+    VALUES (%s, %s, %s)
+    ON CONFLICT (id) DO NOTHING
+    """
+
+    contador = 0
+
+    try:
+        cursor = conexao.cursor()
+
+        for registro in registros:
+            try:
+                cursor.execute(
+                    sql,
+                    (
+                        registro['id'],
+                        registro['nome'],
+                        registro['organizacao_id']
+                    )
+                )
+                contador += 1
+                logger.info(
+                    f"Localização inserida: id={registro['id']}, "
+                    f"nome={registro['nome']}, "
+                    f"organizacao_id={registro['organizacao_id']}"
+                )
+
+            except psycopg2.Error as e:
+                logger.error(
+                    f"Erro ao inserir localização {registro['id']}: {e}"
+                )
+                conexao.rollback()
+                raise
+
+        conexao.commit()
+        logger.info(f"Total de localizações processadas: {contador}")
+
+    finally:
+        cursor.close()
+
+    return contador

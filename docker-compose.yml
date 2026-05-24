@@ -24,6 +24,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./data:/app/data
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -32,6 +34,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CAMINHO_ARQUIVO: ${CAMINHO_ARQUIVO:-./data/MimicOrganization.ndjson.gz}
+      CAMINHO_ARQUIVO_LOCATION: ${CAMINHO_ARQUIVO_LOCATION:-./data/MimicLocation.ndjson.gz}
 
 volumes:
   postgres_data:

@@ -6,7 +6,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY leitor.py banco.py ingestao.py ./
-COPY data/ ./data/
 COPY tests/ ./tests/
 
 CMD ["python", "ingestao.py"]
