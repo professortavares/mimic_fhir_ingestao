@@ -164,6 +164,56 @@ def ler_localizacoes(caminho_arquivo):
     return _ler_arquivo_generico(caminho_arquivo, extrair_campos_location, "Localização")
 
 
+def _extrair_raca_from_extensions(extensions):
+    """Extrai raça dos extensions de um registro Patient."""
+    if not extensions or not isinstance(extensions, list):
+        return None
+
+    for ext in extensions:
+        if not ext.get('url', '').endswith('race'):
+            continue
+
+        value_coding = ext.get('valueCodeableConcept', {})
+        coding = value_coding.get('coding', [])
+        if coding and len(coding) > 0:
+            return coding[0].get('display', '')
+
+        nested_ext = ext.get('extension', [])
+        if isinstance(nested_ext, list):
+            for nested in nested_ext:
+                value_obj = nested.get('valueCoding', {})
+                if value_obj.get('display'):
+                    return value_obj.get('display', '')
+
+    return None
+
+
+def _extrair_identificador_from_list(identifiers):
+    """Extrai primeiro identificador de uma lista."""
+    if identifiers and isinstance(identifiers, list) and len(identifiers) > 0:
+        return identifiers[0].get('value', '')
+    return None
+
+
+def _extrair_idioma_from_communication(communications):
+    """Extrai código de idioma do primeiro item de comunicação."""
+    if communications and isinstance(communications, list) and len(communications) > 0:
+        language = communications[0].get('language', {})
+        coding = language.get('coding', [])
+        if coding and len(coding) > 0:
+            return coding[0].get('code', '')
+    return None
+
+
+def _extrair_codigo_from_coding(coding_field):
+    """Extrai código do primeiro item em um coding."""
+    if coding_field and isinstance(coding_field, dict):
+        coding = coding_field.get('coding', [])
+        if coding and len(coding) > 0:
+            return coding[0].get('code', '')
+    return None
+
+
 def extrair_campos_patient(registro):
     """
     Extrai campos de um registro JSON FHIR Patient.
@@ -199,43 +249,10 @@ def extrair_campos_patient(registro):
         if reference:
             organizacao_id = reference.split('/')[-1]
 
-    raca = None
-    if 'extension' in registro and isinstance(registro['extension'], list):
-        for ext in registro['extension']:
-            if ext.get('url', '').endswith('race'):
-                value_coding = ext.get('valueCodeableConcept', {})
-                coding = value_coding.get('coding', [])
-                if coding and len(coding) > 0:
-                    raca = coding[0].get('display', '')
-                    break
-                nested_ext = ext.get('extension', [])
-                if isinstance(nested_ext, list):
-                    for nested in nested_ext:
-                        value_obj = nested.get('valueCoding', {})
-                        if value_obj.get('display'):
-                            raca = value_obj.get('display', '')
-                            break
-                if raca:
-                    break
-
-    identificador = None
-    if 'identifier' in registro and isinstance(registro['identifier'], list):
-        if len(registro['identifier']) > 0:
-            identificador = registro['identifier'][0].get('value', '')
-
-    idioma = None
-    if 'communication' in registro and isinstance(registro['communication'], list):
-        if len(registro['communication']) > 0:
-            language = registro['communication'][0].get('language', {})
-            coding = language.get('coding', [])
-            if coding and len(coding) > 0:
-                idioma = coding[0].get('code', '')
-
-    estado_civil = None
-    if 'maritalStatus' in registro:
-        coding = registro['maritalStatus'].get('coding', [])
-        if coding and len(coding) > 0:
-            estado_civil = coding[0].get('code', '')
+    raca = _extrair_raca_from_extensions(registro.get('extension'))
+    identificador = _extrair_identificador_from_list(registro.get('identifier'))
+    idioma = _extrair_idioma_from_communication(registro.get('communication'))
+    estado_civil = _extrair_codigo_from_coding(registro.get('maritalStatus'))
 
     data_nascimento = registro.get('birthDate', None)
 
@@ -275,6 +292,83 @@ def ler_pacientes(caminho_arquivo):
     return _ler_arquivo_generico(caminho_arquivo, extrair_campos_patient, "Paciente")
 
 
+def _extrair_tipo_from_encounter(tipo_list):
+    """Extrai tipo de display do primeiro coding da lista type."""
+    if tipo_list and isinstance(tipo_list, list) and len(tipo_list) > 0:
+        coding = tipo_list[0].get('coding', [])
+        if coding and len(coding) > 0:
+            return coding[0].get('display', '')
+    return None
+
+
+def _extrair_classe_from_encounter(classe_obj):
+    """Extrai código da classe."""
+    if classe_obj and isinstance(classe_obj, dict):
+        return classe_obj.get('code', '')
+    return None
+
+
+def _extrair_hosp_admit_source(registro_id, hosp):
+    """Extrai código de admissão hospitalar."""
+    if not hosp or 'admitSource' not in hosp:
+        return None
+
+    coding = hosp['admitSource'].get('coding', [])
+    if coding and len(coding) > 0:
+        return coding[0].get('code', None)
+
+    logger.debug(
+        f"Registro {registro_id}: hospitalizacao_code vazio ou ausente"
+    )
+    return None
+
+
+def _extrair_hosp_discharge_disposition(registro_id, hosp):
+    """Extrai código de alta hospitalar."""
+    if not hosp or 'dischargeDisposition' not in hosp:
+        return None
+
+    coding = hosp['dischargeDisposition'].get('coding', [])
+    if coding and len(coding) > 0:
+        return coding[0].get('code', None)
+
+    logger.debug(
+        f"Registro {registro_id}: alta_code vazio ou ausente"
+    )
+    return None
+
+
+def _extrair_localizacoes_from_encounter(location_list):
+    """Extrai lista de localizações com seus períodos."""
+    localizacoes = []
+    if not location_list or not isinstance(location_list, list):
+        return localizacoes
+
+    for loc in location_list:
+        localizacao_id = None
+        if 'location' in loc:
+            reference = loc['location'].get('reference', '')
+            if reference:
+                localizacao_id = reference.split('/')[-1]
+
+        if not localizacao_id:
+            continue
+
+        loc_periodo_inicio = None
+        loc_periodo_fim = None
+        if 'period' in loc:
+            loc_periodo_inicio = loc['period'].get('start', None)
+            loc_periodo_fim = loc['period'].get('end', None)
+
+        localizacoes.append({
+            'localizacao_id': localizacao_id,
+            'periodo_inicio': loc_periodo_inicio,
+            'periodo_fim': loc_periodo_fim
+        })
+
+    return localizacoes
+
+
 def extrair_campos_encounter(registro):
     """
     Extrai campos de um registro JSON FHIR Encounter.
@@ -301,69 +395,18 @@ def extrair_campos_encounter(registro):
 
     paciente_id = reference.split('/')[-1]
 
-    tipo = None
-    if 'type' in registro and isinstance(registro['type'], list) and len(registro['type']) > 0:
-        coding = registro['type'][0].get('coding', [])
-        if coding and len(coding) > 0:
-            tipo = coding[0].get('display', '')
-
-    classe = None
-    if 'class' in registro:
-        classe = registro['class'].get('code', '')
-
+    tipo = _extrair_tipo_from_encounter(registro.get('type'))
+    classe = _extrair_classe_from_encounter(registro.get('class'))
     periodo_inicio = registro.get('period', {}).get('start', None)
     periodo_fim = registro.get('period', {}).get('end', None)
-
     status = registro.get('status', None)
 
-    hospitalizacao_code = None
-    if 'hospitalization' in registro:
-        hosp = registro['hospitalization']
-        if 'admitSource' in hosp:
-            coding = hosp['admitSource'].get('coding', [])
-            if coding and len(coding) > 0:
-                hospitalizacao_code = coding[0].get('code', None)
-        if not hospitalizacao_code:
-            logger.debug(
-                f"Registro {registro.get('id', 'unknown')}: "
-                f"hospitalizacao_code vazio ou ausente"
-            )
+    registro_id = registro.get('id', 'unknown')
+    hosp = registro.get('hospitalization')
+    hospitalizacao_code = _extrair_hosp_admit_source(registro_id, hosp)
+    alta_code = _extrair_hosp_discharge_disposition(registro_id, hosp)
 
-    alta_code = None
-    if 'hospitalization' in registro:
-        hosp = registro['hospitalization']
-        if 'dischargeDisposition' in hosp:
-            coding = hosp['dischargeDisposition'].get('coding', [])
-            if coding and len(coding) > 0:
-                alta_code = coding[0].get('code', None)
-        if not alta_code:
-            logger.debug(
-                f"Registro {registro.get('id', 'unknown')}: "
-                f"alta_code vazio ou ausente"
-            )
-
-    localizacoes = []
-    if 'location' in registro and isinstance(registro['location'], list):
-        for loc in registro['location']:
-            localizacao_id = None
-            loc_periodo_inicio = None
-            loc_periodo_fim = None
-
-            if 'location' in loc:
-                reference = loc['location'].get('reference', '')
-                if reference:
-                    localizacao_id = reference.split('/')[-1]
-
-            if 'period' in loc:
-                loc_periodo_inicio = loc['period'].get('start', None)
-                loc_periodo_fim = loc['period'].get('end', None)
-
-            if localizacao_id:
-                localizacoes.append({
-                    'localizacao_id': localizacao_id,
-                    'periodo_inicio': loc_periodo_inicio,
-                    'periodo_fim': loc_periodo_fim
-                })
+    localizacoes = _extrair_localizacoes_from_encounter(registro.get('location'))
 
     return {
         'id': registro['id'],
