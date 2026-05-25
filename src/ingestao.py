@@ -4,13 +4,19 @@ import logging
 import os
 import sys
 
-from leitor import ler_registros, ler_localizacoes
+from leitor import ler_registros, ler_localizacoes, ler_pacientes, ler_encontros
 from banco import (
     conectar,
     criar_tabela,
     inserir_organizacoes,
     criar_tabela_localizacoes,
-    inserir_localizacoes
+    inserir_localizacoes,
+    criar_tabela_pacientes,
+    inserir_pacientes,
+    criar_tabela_encontros,
+    inserir_encontros,
+    criar_tabela_encontros_localizacoes,
+    inserir_encontros_localizacoes
 )
 
 
@@ -59,9 +65,11 @@ def main():
     1. Configura logging
     2. Lê variáveis de ambiente
     3. Conecta ao banco
-    4. Cria tabelas (organizacoes e localizacoes)
+    4. Cria tabelas (organizacoes, localizacoes, pacientes, encontros e encontros_localizacoes)
     5. Lê e insere registros de organizações
     6. Lê e insere registros de localizações
+    7. Lê e insere registros de pacientes
+    8. Lê e insere registros de encontros e seus relacionamentos com localizações
     """
     log_level = os.getenv('LOG_LEVEL', 'INFO')
     configurar_logging(log_level)
@@ -77,6 +85,14 @@ def main():
         'CAMINHO_ARQUIVO_LOCATION',
         './data/MimicLocation.ndjson.gz'
     )
+    caminho_arquivo_pac = os.getenv(
+        'CAMINHO_ARQUIVO_PATIENT',
+        './data/MimicPatient.ndjson.gz'
+    )
+    caminho_arquivo_enc = os.getenv(
+        'CAMINHO_ARQUIVO_ENCOUNTER',
+        './data/MimicEncounter.ndjson.gz'
+    )
 
     config_banco = obter_configuracao_banco()
     conexao = None
@@ -85,9 +101,12 @@ def main():
         # Conecta ao banco
         conexao = conectar(config_banco)
 
-        # Cria tabelas
+        # Cria tabelas em ordem de dependência
         criar_tabela(conexao)
         criar_tabela_localizacoes(conexao)
+        criar_tabela_pacientes(conexao)
+        criar_tabela_encontros(conexao)
+        criar_tabela_encontros_localizacoes(conexao)
 
         # Ingestão de Organizações
         logger.info(f"Lendo arquivo de organizações: {caminho_arquivo_org}")
@@ -114,6 +133,38 @@ def main():
             )
         else:
             logger.warning("Nenhum registro de localização válido encontrado")
+
+        # Ingestão de Pacientes
+        logger.info(f"Lendo arquivo de pacientes: {caminho_arquivo_pac}")
+        registros_pac = ler_pacientes(caminho_arquivo_pac)
+
+        if registros_pac:
+            total_pac = inserir_pacientes(conexao, registros_pac)
+            logger.info(
+                f"Pacientes ingeridos com sucesso: "
+                f"{total_pac} registros processados"
+            )
+        else:
+            logger.warning("Nenhum registro de paciente válido encontrado")
+
+        # Ingestão de Encontros
+        logger.info(f"Lendo arquivo de encontros: {caminho_arquivo_enc}")
+        registros_enc = ler_encontros(caminho_arquivo_enc)
+
+        if registros_enc:
+            total_enc = inserir_encontros(conexao, registros_enc)
+            logger.info(
+                f"Encontros ingeridos com sucesso: "
+                f"{total_enc} registros processados"
+            )
+
+            total_enc_loc = inserir_encontros_localizacoes(conexao, registros_enc)
+            logger.info(
+                f"Relacionamentos encontro-localização ingeridos com sucesso: "
+                f"{total_enc_loc} registros processados"
+            )
+        else:
+            logger.warning("Nenhum registro de encontro válido encontrado")
 
         logger.info("Ingestão de dados MIMIC FHIR concluída com sucesso")
 
