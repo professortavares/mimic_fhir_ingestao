@@ -6,6 +6,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+MSG_CAMPO_ID_AUSENTE = "Campo obrigatório ausente: 'id'"
+MSG_CAMPO_NAME_AUSENTE = "Campo obrigatório ausente: 'name'"
+MSG_CAMPO_SUBJECT_AUSENTE = "Campo obrigatório ausente: 'subject'"
+MSG_REFERENCE_INVALIDA = "Campo vazio ou inválido: 'subject.reference'"
+MSG_MANAGING_ORG_AUSENTE = "Campo obrigatório ausente: 'managingOrganization'"
+MSG_MANAGING_ORG_INVALIDA = "Campo vazio ou inválido: 'managingOrganization.reference'"
+
 
 def extrair_campos(registro):
     """
@@ -21,14 +28,65 @@ def extrair_campos(registro):
         ValueError: Se 'id' ou 'name' estão ausentes do registro.
     """
     if 'id' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'id'")
+        raise ValueError(MSG_CAMPO_ID_AUSENTE)
     if 'name' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'name'")
+        raise ValueError(MSG_CAMPO_NAME_AUSENTE)
 
     return {
         'id': registro['id'],
         'nome': registro['name']
     }
+
+
+def _ler_arquivo_generico(caminho_arquivo, funcao_extracao, tipo_registro):
+    """
+    Função auxiliar para ler arquivo NDJSON.gz e extrair registros.
+
+    Args:
+        caminho_arquivo (str): Caminho do arquivo NDJSON.gz.
+        funcao_extracao: Função para extrair campos do registro.
+        tipo_registro (str): Nome do tipo de registro para logs.
+
+    Returns:
+        list: Lista de dicionários extraídos.
+
+    Raises:
+        FileNotFoundError: Se o arquivo não existe.
+        json.JSONDecodeError: Se uma linha não é JSON válido.
+    """
+    registros = []
+
+    try:
+        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
+            for numero_linha, linha in enumerate(arquivo, start=1):
+                linha = linha.strip()
+                if not linha:
+                    continue
+
+                try:
+                    registro_json = json.loads(linha)
+                    registro_extraido = funcao_extracao(registro_json)
+                    registros.append(registro_extraido)
+                    logger.info(
+                        f"{tipo_registro} {numero_linha} lido com sucesso: "
+                        f"id={registro_extraido['id']}"
+                    )
+                except (ValueError, KeyError) as e:
+                    logger.warning(
+                        f"{tipo_registro} {numero_linha} ignorado: {e}"
+                    )
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
+                    )
+                    raise
+
+    except FileNotFoundError as e:
+        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
+        raise
+
+    logger.info(f"Total de {tipo_registro.lower()}s lidos com sucesso: {len(registros)}")
+    return registros
 
 
 def ler_registros(caminho_arquivo):
@@ -49,40 +107,7 @@ def ler_registros(caminho_arquivo):
         FileNotFoundError: Se o arquivo não existe.
         json.JSONDecodeError: Se uma linha não é JSON válido.
     """
-    registros = []
-
-    try:
-        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
-            for numero_linha, linha in enumerate(arquivo, start=1):
-                linha = linha.strip()
-                if not linha:
-                    continue
-
-                try:
-                    registro_json = json.loads(linha)
-                    registro_extraido = extrair_campos(registro_json)
-                    registros.append(registro_extraido)
-                    logger.info(
-                        f"Registro {numero_linha} lido com sucesso: "
-                        f"id={registro_extraido['id']}"
-                    )
-
-                except ValueError as e:
-                    logger.warning(
-                        f"Registro {numero_linha} ignorado: {e}"
-                    )
-                except json.JSONDecodeError as e:
-                    logger.error(
-                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
-                    )
-                    raise
-
-    except FileNotFoundError as e:
-        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
-        raise
-
-    logger.info(f"Total de registros lidos com sucesso: {len(registros)}")
-    return registros
+    return _ler_arquivo_generico(caminho_arquivo, extrair_campos, "Registro")
 
 
 def extrair_campos_location(registro):
@@ -99,15 +124,15 @@ def extrair_campos_location(registro):
         ValueError: Se algum campo obrigatório estiver ausente.
     """
     if 'id' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'id'")
+        raise ValueError(MSG_CAMPO_ID_AUSENTE)
     if 'name' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'name'")
+        raise ValueError(MSG_CAMPO_NAME_AUSENTE)
     if 'managingOrganization' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'managingOrganization'")
+        raise ValueError(MSG_MANAGING_ORG_AUSENTE)
 
     reference = registro['managingOrganization'].get('reference', '')
     if not reference:
-        raise ValueError("Campo vazio ou inválido: 'managingOrganization.reference'")
+        raise ValueError(MSG_MANAGING_ORG_INVALIDA)
 
     organizacao_id = reference.split('/')[-1]
 
@@ -136,40 +161,7 @@ def ler_localizacoes(caminho_arquivo):
         FileNotFoundError: Se o arquivo não existe.
         json.JSONDecodeError: Se uma linha não é JSON válido.
     """
-    registros = []
-
-    try:
-        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
-            for numero_linha, linha in enumerate(arquivo, start=1):
-                linha = linha.strip()
-                if not linha:
-                    continue
-
-                try:
-                    registro_json = json.loads(linha)
-                    registro_extraido = extrair_campos_location(registro_json)
-                    registros.append(registro_extraido)
-                    logger.info(
-                        f"Localização {numero_linha} lida com sucesso: "
-                        f"id={registro_extraido['id']}"
-                    )
-
-                except ValueError as e:
-                    logger.warning(
-                        f"Localização {numero_linha} ignorada: {e}"
-                    )
-                except json.JSONDecodeError as e:
-                    logger.error(
-                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
-                    )
-                    raise
-
-    except FileNotFoundError as e:
-        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
-        raise
-
-    logger.info(f"Total de localizações lidas com sucesso: {len(registros)}")
-    return registros
+    return _ler_arquivo_generico(caminho_arquivo, extrair_campos_location, "Localização")
 
 
 def extrair_campos_patient(registro):
@@ -187,9 +179,9 @@ def extrair_campos_patient(registro):
         ValueError: Se algum campo obrigatório estiver ausente.
     """
     if 'id' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'id'")
+        raise ValueError(MSG_CAMPO_ID_AUSENTE)
     if 'name' not in registro or not registro['name']:
-        raise ValueError("Campo obrigatório ausente: 'name'")
+        raise ValueError(MSG_CAMPO_NAME_AUSENTE)
     if 'gender' not in registro:
         raise ValueError("Campo obrigatório ausente: 'gender'")
 
@@ -280,40 +272,7 @@ def ler_pacientes(caminho_arquivo):
         FileNotFoundError: Se o arquivo não existe.
         json.JSONDecodeError: Se uma linha não é JSON válido.
     """
-    registros = []
-
-    try:
-        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
-            for numero_linha, linha in enumerate(arquivo, start=1):
-                linha = linha.strip()
-                if not linha:
-                    continue
-
-                try:
-                    registro_json = json.loads(linha)
-                    registro_extraido = extrair_campos_patient(registro_json)
-                    registros.append(registro_extraido)
-                    logger.info(
-                        f"Paciente {numero_linha} lido com sucesso: "
-                        f"id={registro_extraido['id']}"
-                    )
-
-                except ValueError as e:
-                    logger.warning(
-                        f"Paciente {numero_linha} ignorado: {e}"
-                    )
-                except json.JSONDecodeError as e:
-                    logger.error(
-                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
-                    )
-                    raise
-
-    except FileNotFoundError as e:
-        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
-        raise
-
-    logger.info(f"Total de pacientes lidos com sucesso: {len(registros)}")
-    return registros
+    return _ler_arquivo_generico(caminho_arquivo, extrair_campos_patient, "Paciente")
 
 
 def extrair_campos_encounter(registro):
@@ -332,13 +291,13 @@ def extrair_campos_encounter(registro):
         ValueError: Se algum campo obrigatório estiver ausente.
     """
     if 'id' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'id'")
+        raise ValueError(MSG_CAMPO_ID_AUSENTE)
     if 'subject' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'subject'")
+        raise ValueError(MSG_CAMPO_SUBJECT_AUSENTE)
 
     reference = registro['subject'].get('reference', '')
     if not reference:
-        raise ValueError("Campo vazio ou inválido: 'subject.reference'")
+        raise ValueError(MSG_REFERENCE_INVALIDA)
 
     paciente_id = reference.split('/')[-1]
 
@@ -440,40 +399,7 @@ def ler_encontros(caminho_arquivo):
         FileNotFoundError: Se o arquivo não existe.
         json.JSONDecodeError: Se uma linha não é JSON válido.
     """
-    registros = []
-
-    try:
-        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
-            for numero_linha, linha in enumerate(arquivo, start=1):
-                linha = linha.strip()
-                if not linha:
-                    continue
-
-                try:
-                    registro_json = json.loads(linha)
-                    registro_extraido = extrair_campos_encounter(registro_json)
-                    registros.append(registro_extraido)
-                    logger.info(
-                        f"Encontro {numero_linha} lido com sucesso: "
-                        f"id={registro_extraido['id']}"
-                    )
-
-                except ValueError as e:
-                    logger.warning(
-                        f"Encontro {numero_linha} ignorado: {e}"
-                    )
-                except json.JSONDecodeError as e:
-                    logger.error(
-                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
-                    )
-                    raise
-
-    except FileNotFoundError as e:
-        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
-        raise
-
-    logger.info(f"Total de encontros lidos com sucesso: {len(registros)}")
-    return registros
+    return _ler_arquivo_generico(caminho_arquivo, extrair_campos_encounter, "Encontro")
 
 
 def extrair_campos_condition(registro):
@@ -491,13 +417,13 @@ def extrair_campos_condition(registro):
         ValueError: Se algum campo obrigatório estiver ausente.
     """
     if 'id' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'id'")
+        raise ValueError(MSG_CAMPO_ID_AUSENTE)
     if 'subject' not in registro:
-        raise ValueError("Campo obrigatório ausente: 'subject'")
+        raise ValueError(MSG_CAMPO_SUBJECT_AUSENTE)
 
     reference = registro['subject'].get('reference', '')
     if not reference:
-        raise ValueError("Campo vazio ou inválido: 'subject.reference'")
+        raise ValueError(MSG_REFERENCE_INVALIDA)
 
     paciente_id = reference.split('/')[-1]
 
@@ -599,40 +525,7 @@ def ler_procedimentos(caminho_arquivo):
         FileNotFoundError: Se o arquivo não existe.
         json.JSONDecodeError: Se uma linha não é JSON válido.
     """
-    registros = []
-
-    try:
-        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
-            for numero_linha, linha in enumerate(arquivo, start=1):
-                linha = linha.strip()
-                if not linha:
-                    continue
-
-                try:
-                    registro_json = json.loads(linha)
-                    registro_extraido = extrair_campos_procedure(registro_json)
-                    registros.append(registro_extraido)
-                    logger.info(
-                        f"Procedimento {numero_linha} lido com sucesso: "
-                        f"id={registro_extraido['id']}"
-                    )
-
-                except ValueError as e:
-                    logger.warning(
-                        f"Procedimento {numero_linha} ignorado: {e}"
-                    )
-                except json.JSONDecodeError as e:
-                    logger.error(
-                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
-                    )
-                    raise
-
-    except FileNotFoundError as e:
-        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
-        raise
-
-    logger.info(f"Total de procedimentos lidos com sucesso: {len(registros)}")
-    return registros
+    return _ler_arquivo_generico(caminho_arquivo, extrair_campos_procedure, "Procedimento")
 
 
 def ler_condicoes(caminho_arquivo):
@@ -654,37 +547,4 @@ def ler_condicoes(caminho_arquivo):
         FileNotFoundError: Se o arquivo não existe.
         json.JSONDecodeError: Se uma linha não é JSON válido.
     """
-    registros = []
-
-    try:
-        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
-            for numero_linha, linha in enumerate(arquivo, start=1):
-                linha = linha.strip()
-                if not linha:
-                    continue
-
-                try:
-                    registro_json = json.loads(linha)
-                    registro_extraido = extrair_campos_condition(registro_json)
-                    registros.append(registro_extraido)
-                    logger.info(
-                        f"Condição {numero_linha} lida com sucesso: "
-                        f"id={registro_extraido['id']}"
-                    )
-
-                except ValueError as e:
-                    logger.warning(
-                        f"Condição {numero_linha} ignorada: {e}"
-                    )
-                except json.JSONDecodeError as e:
-                    logger.error(
-                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
-                    )
-                    raise
-
-    except FileNotFoundError as e:
-        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
-        raise
-
-    logger.info(f"Total de condições lidas com sucesso: {len(registros)}")
-    return registros
+    return _ler_arquivo_generico(caminho_arquivo, extrair_campos_condition, "Condição")

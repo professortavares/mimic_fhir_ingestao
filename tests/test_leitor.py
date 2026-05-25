@@ -151,7 +151,7 @@ class TestLerRegistros(unittest.TestCase):
     def test_ler_registros_arquivo_vazio(self):
         """Testa leitura de arquivo vazio."""
         with tempfile.NamedTemporaryFile(suffix='.ndjson.gz', delete=False) as tmp:
-            with gzip.open(tmp.name, 'wt', encoding='utf-8') as gz:
+            with gzip.open(tmp.name, 'wt', encoding='utf-8'):
                 pass  # Arquivo vazio
 
             try:
