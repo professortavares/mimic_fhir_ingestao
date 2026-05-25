@@ -567,3 +567,111 @@ def inserir_encontros_localizacoes(conexao, encontros_com_localizacoes):
         cursor.close()
 
     return contador
+
+
+def criar_tabela_condicoes(conexao):
+    """
+    Cria tabela 'condicoes' se não existir.
+
+    A tabela possui colunas:
+    - id: VARCHAR(255), chave primária
+    - code_system: VARCHAR(500)
+    - code_value: VARCHAR(100)
+    - code_display: TEXT
+    - paciente_id: VARCHAR(255), chave estrangeira referenciando pacientes
+    - encontro_id: VARCHAR(255), chave estrangeira referenciando encontros (opcional)
+
+    Args:
+        conexao (psycopg2.connection): Conexão com o banco.
+
+    Raises:
+        psycopg2.Error: Se o comando SQL falhar.
+    """
+    sql = """
+    CREATE TABLE IF NOT EXISTS condicoes (
+        id VARCHAR(255) PRIMARY KEY,
+        code_system VARCHAR(500),
+        code_value VARCHAR(100),
+        code_display TEXT,
+        paciente_id VARCHAR(255) REFERENCES pacientes(id),
+        encontro_id VARCHAR(255) REFERENCES encontros(id)
+    )
+    """
+
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(sql)
+        conexao.commit()
+        logger.info("Tabela 'condicoes' criada ou já existe")
+
+    except psycopg2.Error as e:
+        logger.error(f"Erro ao criar tabela: {e}")
+        conexao.rollback()
+        raise
+
+    finally:
+        cursor.close()
+
+
+def inserir_condicoes(conexao, registros):
+    """
+    Insere registros de condições na tabela.
+
+    Usa INSERT ... ON CONFLICT para garantir idempotência:
+    se um registro com mesmo 'id' já existe, é ignorado.
+
+    Args:
+        conexao (psycopg2.connection): Conexão com o banco.
+        registros (list): Lista de dicionários com campos de condição.
+
+    Returns:
+        int: Número de registros processados.
+
+    Raises:
+        psycopg2.Error: Se algum INSERT falhar.
+    """
+    sql = """
+    INSERT INTO condicoes (id, code_system, code_value, code_display, paciente_id, encontro_id)
+    VALUES (%s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO NOTHING
+    """
+
+    contador = 0
+
+    try:
+        cursor = conexao.cursor()
+
+        for registro in registros:
+            try:
+                cursor.execute(
+                    sql,
+                    (
+                        registro['id'],
+                        registro['code_system'],
+                        registro['code_value'],
+                        registro['code_display'],
+                        registro['paciente_id'],
+                        registro['encontro_id']
+                    )
+                )
+                contador += 1
+                logger.info(
+                    f"Condição inserida: id={registro['id']}, "
+                    f"code={registro['code_value']}, "
+                    f"paciente_id={registro['paciente_id']}"
+                )
+
+            except psycopg2.Error as e:
+                logger.error(
+                    f"Erro ao inserir condição {registro['id']}: {e}"
+                )
+                conexao.rollback()
+                raise
+
+        conexao.commit()
+        logger.info(f"Total de condições processadas: {contador}")
+
+    finally:
+        cursor.close()
+
+    return contador

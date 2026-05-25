@@ -14,7 +14,9 @@ from leitor import (
     extrair_campos_patient,
     ler_pacientes,
     extrair_campos_encounter,
-    ler_encontros
+    ler_encontros,
+    extrair_campos_condition,
+    ler_condicoes
 )
 
 
@@ -708,6 +710,222 @@ class TestLerEncontros(unittest.TestCase):
                 # Apenas o primeiro registro deve estar na lista
                 self.assertEqual(len(resultado), 1)
                 self.assertEqual(resultado[0]['id'], 'enc-1')
+
+            finally:
+                import os
+                os.unlink(tmp.name)
+
+
+class TestExtrairCamposCondition(unittest.TestCase):
+    """Testes para a função extrair_campos_condition."""
+
+    def test_extrair_campos_condition_sucesso(self):
+        """Testa extração bem-sucedida de uma condição."""
+        registro = {
+            'id': 'cond-1',
+            'subject': {'reference': 'Patient/pat-1'},
+            'encounter': {'reference': 'Encounter/enc-1'},
+            'code': {
+                'coding': [
+                    {
+                        'system': 'http://snomed.info/sct',
+                        'code': '233604007',
+                        'display': 'Pneumonia'
+                    }
+                ]
+            }
+        }
+
+        resultado = extrair_campos_condition(registro)
+
+        self.assertEqual(resultado['id'], 'cond-1')
+        self.assertEqual(resultado['paciente_id'], 'pat-1')
+        self.assertEqual(resultado['encontro_id'], 'enc-1')
+        self.assertEqual(resultado['code_system'], 'http://snomed.info/sct')
+        self.assertEqual(resultado['code_value'], '233604007')
+        self.assertEqual(resultado['code_display'], 'Pneumonia')
+
+    def test_extrair_campos_condition_sem_id(self):
+        """Testa que ValueError é levantado se 'id' está ausente."""
+        registro = {
+            'subject': {'reference': 'Patient/pat-1'}
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_condition(registro)
+
+        self.assertIn('id', str(contexto.exception))
+
+    def test_extrair_campos_condition_sem_subject(self):
+        """Testa que ValueError é levantado se 'subject' está ausente."""
+        registro = {
+            'id': 'cond-1'
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_condition(registro)
+
+        self.assertIn('subject', str(contexto.exception))
+
+    def test_extrair_campos_condition_subject_reference_vazia(self):
+        """Testa que ValueError é levantado se subject.reference está vazia."""
+        registro = {
+            'id': 'cond-1',
+            'subject': {'reference': ''}
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_condition(registro)
+
+        self.assertIn('reference', str(contexto.exception).lower())
+
+    def test_extrair_campos_condition_encontro_opcional(self):
+        """Testa que encontro_id é None se encounter está ausente."""
+        registro = {
+            'id': 'cond-2',
+            'subject': {'reference': 'Patient/pat-2'},
+            'code': {
+                'coding': [
+                    {
+                        'system': 'http://snomed.info/sct',
+                        'code': '123456',
+                        'display': 'Some Condition'
+                    }
+                ]
+            }
+        }
+
+        resultado = extrair_campos_condition(registro)
+
+        self.assertEqual(resultado['id'], 'cond-2')
+        self.assertEqual(resultado['paciente_id'], 'pat-2')
+        self.assertIsNone(resultado['encontro_id'])
+        self.assertEqual(resultado['code_value'], '123456')
+
+    def test_extrair_campos_condition_code_opcional(self):
+        """Testa que campos code são None se code está ausente."""
+        registro = {
+            'id': 'cond-3',
+            'subject': {'reference': 'Patient/pat-3'}
+        }
+
+        resultado = extrair_campos_condition(registro)
+
+        self.assertEqual(resultado['id'], 'cond-3')
+        self.assertIsNone(resultado['code_system'])
+        self.assertIsNone(resultado['code_value'])
+        self.assertIsNone(resultado['code_display'])
+
+    def test_extrair_campos_condition_extrai_uuid_paciente_corretamente(self):
+        """Testa que o UUID do paciente é extraído corretamente."""
+        registro = {
+            'id': 'cond-4',
+            'subject': {'reference': 'Patient/patient-uuid-12345'}
+        }
+
+        resultado = extrair_campos_condition(registro)
+
+        self.assertEqual(resultado['paciente_id'], 'patient-uuid-12345')
+
+    def test_extrair_campos_condition_extrai_uuid_encontro_corretamente(self):
+        """Testa que o UUID do encontro é extraído corretamente."""
+        registro = {
+            'id': 'cond-5',
+            'subject': {'reference': 'Patient/pat-5'},
+            'encounter': {'reference': 'Encounter/encounter-uuid-67890'}
+        }
+
+        resultado = extrair_campos_condition(registro)
+
+        self.assertEqual(resultado['encontro_id'], 'encounter-uuid-67890')
+
+
+class TestLerCondicoes(unittest.TestCase):
+    """Testes para a função ler_condicoes."""
+
+    def test_ler_condicoes_sucesso(self):
+        """Testa leitura bem-sucedida de arquivo NDJSON.gz de condições."""
+        dados = [
+            {
+                'id': 'cond-1',
+                'subject': {'reference': 'Patient/pat-1'},
+                'encounter': {'reference': 'Encounter/enc-1'},
+                'code': {
+                    'coding': [
+                        {
+                            'system': 'http://snomed.info/sct',
+                            'code': '233604007',
+                            'display': 'Pneumonia'
+                        }
+                    ]
+                }
+            },
+            {
+                'id': 'cond-2',
+                'subject': {'reference': 'Patient/pat-2'},
+                'code': {
+                    'coding': [
+                        {
+                            'system': 'http://snomed.info/sct',
+                            'code': '38341003',
+                            'display': 'Hypertension'
+                        }
+                    ]
+                }
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.ndjson.gz', delete=False) as tmp:
+            with gzip.open(tmp.name, 'wt', encoding='utf-8') as gz:
+                for registro in dados:
+                    gz.write(json.dumps(registro) + '\n')
+
+            try:
+                resultado = ler_condicoes(tmp.name)
+
+                self.assertEqual(len(resultado), 2)
+                self.assertEqual(resultado[0]['id'], 'cond-1')
+                self.assertEqual(resultado[0]['paciente_id'], 'pat-1')
+                self.assertEqual(resultado[0]['encontro_id'], 'enc-1')
+                self.assertEqual(resultado[1]['id'], 'cond-2')
+                self.assertIsNone(resultado[1]['encontro_id'])
+
+            finally:
+                import os
+                os.unlink(tmp.name)
+
+    def test_ler_condicoes_arquivo_nao_encontrado(self):
+        """Testa que FileNotFoundError é levantado para arquivo inexistente."""
+        with self.assertRaises(FileNotFoundError):
+            ler_condicoes('./data/arquivo_inexistente.ndjson.gz')
+
+    def test_ler_condicoes_campos_ausentes(self):
+        """Testa que registros com campos obrigatórios ausentes são ignorados."""
+        dados = [
+            {
+                'id': 'cond-1',
+                'subject': {'reference': 'Patient/pat-1'}
+            },
+            {
+                'subject': {'reference': 'Patient/pat-2'}
+            },
+            {
+                'id': 'cond-3',
+                'subject': {'reference': 'Patient/pat-3'}
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.ndjson.gz', delete=False) as tmp:
+            with gzip.open(tmp.name, 'wt', encoding='utf-8') as gz:
+                for registro in dados:
+                    gz.write(json.dumps(registro) + '\n')
+
+            try:
+                resultado = ler_condicoes(tmp.name)
+
+                self.assertEqual(len(resultado), 2)
+                self.assertEqual(resultado[0]['id'], 'cond-1')
+                self.assertEqual(resultado[1]['id'], 'cond-3')
 
             finally:
                 import os
