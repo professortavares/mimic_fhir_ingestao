@@ -1,0 +1,1 @@
+/evoluir-ingestao-fhir evolua a ingestão para o arquivo ./data/MimicPatient.ndjson.gz, com as seguintes colunas: id, name (family), gender, birthDate, race (display), identifier(value), language (code), maritalStatus (code), e uma FK para organization - managingOrganization
