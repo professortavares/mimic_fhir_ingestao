@@ -359,15 +359,29 @@ def extrair_campos_encounter(registro):
 
     hospitalizacao_code = None
     if 'hospitalization' in registro:
-        coding = registro['hospitalization'].get('coding', [])
-        if coding and len(coding) > 0:
-            hospitalizacao_code = coding[0].get('code', '')
+        hosp = registro['hospitalization']
+        if 'admitSource' in hosp:
+            coding = hosp['admitSource'].get('coding', [])
+            if coding and len(coding) > 0:
+                hospitalizacao_code = coding[0].get('code', None)
+        if not hospitalizacao_code:
+            logger.debug(
+                f"Registro {registro.get('id', 'unknown')}: "
+                f"hospitalizacao_code vazio ou ausente"
+            )
 
     alta_code = None
-    if 'dischargeDisposition' in registro:
-        coding = registro['dischargeDisposition'].get('coding', [])
-        if coding and len(coding) > 0:
-            alta_code = coding[0].get('code', '')
+    if 'hospitalization' in registro:
+        hosp = registro['hospitalization']
+        if 'dischargeDisposition' in hosp:
+            coding = hosp['dischargeDisposition'].get('coding', [])
+            if coding and len(coding) > 0:
+                alta_code = coding[0].get('code', None)
+        if not alta_code:
+            logger.debug(
+                f"Registro {registro.get('id', 'unknown')}: "
+                f"alta_code vazio ou ausente"
+            )
 
     localizacoes = []
     if 'location' in registro and isinstance(registro['location'], list):

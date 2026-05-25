@@ -537,8 +537,10 @@ class TestExtrairCamposEncounter(unittest.TestCase):
             'class': {'code': 'IMP'},
             'period': {'start': '2020-01-01T10:00:00Z', 'end': '2020-01-05T14:00:00Z'},
             'status': 'finished',
-            'hospitalization': {'coding': [{'code': 'hosp-code'}]},
-            'dischargeDisposition': {'coding': [{'code': 'discharge-code'}]},
+            'hospitalization': {
+                'admitSource': {'coding': [{'code': 'TRANSFER FROM HOSPITAL'}]},
+                'dischargeDisposition': {'coding': [{'code': 'HOME'}]}
+            },
             'location': [
                 {
                     'location': {'reference': 'Location/loc-1'},
@@ -560,8 +562,8 @@ class TestExtrairCamposEncounter(unittest.TestCase):
         self.assertEqual(resultado['periodo_inicio'], '2020-01-01T10:00:00Z')
         self.assertEqual(resultado['periodo_fim'], '2020-01-05T14:00:00Z')
         self.assertEqual(resultado['status'], 'finished')
-        self.assertEqual(resultado['hospitalizacao_code'], 'hosp-code')
-        self.assertEqual(resultado['alta_code'], 'discharge-code')
+        self.assertEqual(resultado['hospitalizacao_code'], 'TRANSFER FROM HOSPITAL')
+        self.assertEqual(resultado['alta_code'], 'HOME')
         self.assertEqual(len(resultado['localizacoes']), 2)
         self.assertEqual(resultado['localizacoes'][0]['localizacao_id'], 'loc-1')
         self.assertEqual(resultado['localizacoes'][1]['localizacao_id'], 'loc-2')
@@ -641,6 +643,65 @@ class TestExtrairCamposEncounter(unittest.TestCase):
         resultado = extrair_campos_encounter(registro)
 
         self.assertEqual(len(resultado['localizacoes']), 0)
+
+    def test_extrair_campos_encounter_hosp_parcial_apenas_admit(self):
+        """Testa extração com apenas admitSource na hospitalization."""
+        registro = {
+            'id': 'enc-5',
+            'subject': {'reference': 'Patient/pat-5'},
+            'hospitalization': {
+                'admitSource': {'coding': [{'code': 'TRANSFER FROM HOSPITAL'}]}
+            }
+        }
+
+        resultado = extrair_campos_encounter(registro)
+
+        self.assertEqual(resultado['hospitalizacao_code'], 'TRANSFER FROM HOSPITAL')
+        self.assertIsNone(resultado['alta_code'])
+
+    def test_extrair_campos_encounter_hosp_parcial_apenas_discharge(self):
+        """Testa extração com apenas dischargeDisposition na hospitalization."""
+        registro = {
+            'id': 'enc-6',
+            'subject': {'reference': 'Patient/pat-6'},
+            'hospitalization': {
+                'dischargeDisposition': {'coding': [{'code': 'HOME'}]}
+            }
+        }
+
+        resultado = extrair_campos_encounter(registro)
+
+        self.assertIsNone(resultado['hospitalizacao_code'])
+        self.assertEqual(resultado['alta_code'], 'HOME')
+
+    def test_extrair_campos_encounter_hosp_sem_coding(self):
+        """Testa extração quando admitSource ou dischargeDisposition faltam coding."""
+        registro = {
+            'id': 'enc-7',
+            'subject': {'reference': 'Patient/pat-7'},
+            'hospitalization': {
+                'admitSource': {},
+                'dischargeDisposition': {}
+            }
+        }
+
+        resultado = extrair_campos_encounter(registro)
+
+        self.assertIsNone(resultado['hospitalizacao_code'])
+        self.assertIsNone(resultado['alta_code'])
+
+    def test_extrair_campos_encounter_hosp_vazio(self):
+        """Testa extração quando hospitalization é vazio."""
+        registro = {
+            'id': 'enc-8',
+            'subject': {'reference': 'Patient/pat-8'},
+            'hospitalization': {}
+        }
+
+        resultado = extrair_campos_encounter(registro)
+
+        self.assertIsNone(resultado['hospitalizacao_code'])
+        self.assertIsNone(resultado['alta_code'])
 
 
 class TestLerEncontros(unittest.TestCase):

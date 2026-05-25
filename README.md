@@ -8,7 +8,7 @@ Este projeto realiza a ingestão de registros FHIR do MIMIC (Medical Information
 - **Organizações** (`MimicOrganization.ndjson.gz`): extraindo `id` e `name` para a tabela `organizacoes`
 - **Localizações** (`MimicLocation.ndjson.gz`): extraindo `id`, `name` e FK para `organizacoes` na tabela `localizacoes`
 - **Pacientes** (`MimicPatient.ndjson.gz`): extraindo `id`, `name (family)`, `gender`, `birthDate`, `race`, `identifier`, `language`, `maritalStatus` e FK para `organizacoes` na tabela `pacientes`
-- **Encontros** (`MimicEncounter.ndjson.gz`): extraindo `id`, `type (display)`, `class (code)`, `period (start/end)`, `status`, `hospitalization (code)`, `dischargeDisposition (code)`, FK para `pacientes` e relacionamento com múltiplas `localizacoes` (com periods) na tabela `encontros` e `encontros_localizacoes`
+- **Encontros** (`MimicEncounter.ndjson.gz`): extraindo `id`, `type (display)`, `class (code)`, `period (start/end)`, `status`, `hospitalization.admitSource (code)`, `hospitalization.dischargeDisposition (code)`, FK para `pacientes` e relacionamento com múltiplas `localizacoes` (com periods) na tabela `encontros` e `encontros_localizacoes`
 - **Condições** (`MimicCondition.ndjson.gz`): extraindo `id`, `code (system/value/display)`, FK para `pacientes` e FK para `encontros` na tabela `condicoes`
 - **Procedimentos** (`MimicProcedure.ndjson.gz`): extraindo `id`, `code (code/display)`, `status`, `performedDateTime`, FK para `pacientes` e FK para `encontros` na tabela `procedimentos`
 
@@ -418,18 +418,20 @@ Estrutura esperada:
   },
   "status": "finished",
   "hospitalization": {
-    "coding": [
-      {
-        "code": "hosp-code"
-      }
-    ]
-  },
-  "dischargeDisposition": {
-    "coding": [
-      {
-        "code": "discharge-code"
-      }
-    ]
+    "admitSource": {
+      "coding": [
+        {
+          "code": "TRANSFER FROM HOSPITAL"
+        }
+      ]
+    },
+    "dischargeDisposition": {
+      "coding": [
+        {
+          "code": "HOME"
+        }
+      ]
+    }
   },
   "location": [
     {
@@ -456,7 +458,7 @@ Estrutura esperada:
 }
 ```
 
-Campos extraídos: `id`, `paciente_id` (extraído de `subject.reference`), `tipo` (extraído de `type[0].coding[0].display`), `classe` (extraído de `class.code`), `periodo_inicio` e `periodo_fim` (extraídos de `period.start` e `period.end`), `status`, `hospitalizacao_code` (extraído de `hospitalization.coding[0].code`), `alta_code` (extraído de `dischargeDisposition.coding[0].code`), e múltiplos relacionamentos com localizações (com períodos próprios)
+Campos extraídos: `id`, `paciente_id` (extraído de `subject.reference`), `tipo` (extraído de `type[0].coding[0].display`), `classe` (extraído de `class.code`), `periodo_inicio` e `periodo_fim` (extraídos de `period.start` e `period.end`), `status`, `hospitalizacao_code` (extraído de `hospitalization.admitSource.coding[0].code`), `alta_code` (extraído de `hospitalization.dischargeDisposition.coding[0].code`), e múltiplos relacionamentos com localizações (com períodos próprios)
 
 ### `MimicCondition.ndjson.gz`
 Cada linha é um registro FHIR Condition em JSON.
@@ -555,6 +557,24 @@ Para ver os logs da aplicação:
 ```bash
 docker compose logs app
 ```
+
+Para diagnosticar registros de Encounter sem valores de `hospitalizacao_code` ou `alta_code`, execute com `LOG_LEVEL=DEBUG`:
+
+```bash
+LOG_LEVEL=DEBUG docker compose up --build
+```
+
+Os logs de DEBUG indicarão quais registros têm campos vazios:
+```
+Registro 9c4ef2ae-...: hospitalizacao_code vazio ou ausente
+Registro 89ec6d79-...: alta_code vazio ou ausente
+```
+
+Estes campos são extraídos de:
+- `hospitalizacao_code`: `hospitalization.admitSource.coding[0].code`
+- `alta_code`: `hospitalization.dischargeDisposition.coding[0].code`
+
+Se os campos estão vazios no PostgreSQL mas existem no arquivo, verifique a estrutura JSON do Encounter no arquivo de origem.
 
 ## Desenvolvedor
 
