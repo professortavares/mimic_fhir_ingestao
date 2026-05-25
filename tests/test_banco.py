@@ -9,7 +9,11 @@ from banco import (
     criar_tabela_localizacoes,
     inserir_localizacoes,
     criar_tabela_pacientes,
-    inserir_pacientes
+    inserir_pacientes,
+    criar_tabela_encontros,
+    inserir_encontros,
+    criar_tabela_encontros_localizacoes,
+    inserir_encontros_localizacoes
 )
 
 
@@ -314,6 +318,248 @@ class TestInserirPacientes(unittest.TestCase):
         self.assertEqual(
             call_args[1],
             ('pat-uuid', 'Test', 'male', '1990-01-01', None, None, None, None, 'org-uuid')
+        )
+
+
+class TestCriarTabelaEncontros(unittest.TestCase):
+    """Testes para a função criar_tabela_encontros."""
+
+    def test_criar_tabela_encontros_sucesso(self):
+        """Testa criação de tabela encontros com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        criar_tabela_encontros(mock_conexao)
+
+        mock_cursor.execute.assert_called_once()
+        sql_chamada = mock_cursor.execute.call_args[0][0]
+        self.assertIn('CREATE TABLE IF NOT EXISTS encontros', sql_chamada)
+        self.assertIn('id VARCHAR(255) PRIMARY KEY', sql_chamada)
+        self.assertIn('tipo TEXT', sql_chamada)
+        self.assertIn('classe VARCHAR(50)', sql_chamada)
+        self.assertIn('periodo_inicio TIMESTAMP', sql_chamada)
+        self.assertIn('periodo_fim TIMESTAMP', sql_chamada)
+        self.assertIn('status VARCHAR(50)', sql_chamada)
+        self.assertIn('hospitalizacao_code VARCHAR(50)', sql_chamada)
+        self.assertIn('alta_code VARCHAR(50)', sql_chamada)
+        self.assertIn('paciente_id VARCHAR(255) REFERENCES pacientes(id)', sql_chamada)
+
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+
+class TestInserirEncontros(unittest.TestCase):
+    """Testes para a função inserir_encontros."""
+
+    def test_inserir_encontros_sucesso(self):
+        """Testa inserção de registros de encontros com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+        mock_cursor.rowcount = 1
+
+        registros = [
+            {
+                'id': 'enc-1',
+                'tipo': 'Hospitalization',
+                'classe': 'IMP',
+                'periodo_inicio': '2020-01-01T10:00:00Z',
+                'periodo_fim': '2020-01-05T14:00:00Z',
+                'status': 'finished',
+                'hospitalizacao_code': 'hosp-code',
+                'alta_code': 'discharge-code',
+                'paciente_id': 'pat-1',
+                'localizacoes': []
+            },
+            {
+                'id': 'enc-2',
+                'tipo': 'Outpatient',
+                'classe': 'AMB',
+                'periodo_inicio': '2020-02-01T09:00:00Z',
+                'periodo_fim': '2020-02-01T11:00:00Z',
+                'status': 'finished',
+                'hospitalizacao_code': None,
+                'alta_code': None,
+                'paciente_id': 'pat-2',
+                'localizacoes': []
+            }
+        ]
+
+        resultado = inserir_encontros(mock_conexao, registros)
+
+        self.assertEqual(resultado, 2)
+        self.assertEqual(mock_cursor.execute.call_count, 2)
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+    def test_inserir_encontros_vazio(self):
+        """Testa inserção com lista vazia."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        resultado = inserir_encontros(mock_conexao, [])
+
+        self.assertEqual(resultado, 0)
+        mock_cursor.execute.assert_not_called()
+        mock_conexao.commit.assert_called_once()
+
+    def test_inserir_encontros_com_fk(self):
+        """Testa que FK é incluída no INSERT."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        registros = [
+            {
+                'id': 'enc-uuid',
+                'tipo': 'Hospitalization',
+                'classe': 'IMP',
+                'periodo_inicio': '2020-01-01T10:00:00Z',
+                'periodo_fim': '2020-01-05T14:00:00Z',
+                'status': 'finished',
+                'hospitalizacao_code': 'code',
+                'alta_code': 'discharge',
+                'paciente_id': 'pat-uuid',
+                'localizacoes': []
+            }
+        ]
+
+        inserir_encontros(mock_conexao, registros)
+
+        call_args = mock_cursor.execute.call_args[0]
+        self.assertEqual(
+            call_args[1],
+            (
+                'enc-uuid',
+                'Hospitalization',
+                'IMP',
+                '2020-01-01T10:00:00Z',
+                '2020-01-05T14:00:00Z',
+                'finished',
+                'code',
+                'discharge',
+                'pat-uuid'
+            )
+        )
+
+
+class TestCriarTabelaEncontrosLocalizacoes(unittest.TestCase):
+    """Testes para a função criar_tabela_encontros_localizacoes."""
+
+    def test_criar_tabela_encontros_localizacoes_sucesso(self):
+        """Testa criação de tabela encontros_localizacoes com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        criar_tabela_encontros_localizacoes(mock_conexao)
+
+        mock_cursor.execute.assert_called_once()
+        sql_chamada = mock_cursor.execute.call_args[0][0]
+        self.assertIn('CREATE TABLE IF NOT EXISTS encontros_localizacoes', sql_chamada)
+        self.assertIn('encontro_id VARCHAR(255) REFERENCES encontros(id)', sql_chamada)
+        self.assertIn('localizacao_id VARCHAR(255) REFERENCES localizacoes(id)', sql_chamada)
+        self.assertIn('periodo_inicio TIMESTAMP', sql_chamada)
+        self.assertIn('periodo_fim TIMESTAMP', sql_chamada)
+        self.assertIn('PRIMARY KEY (encontro_id, localizacao_id)', sql_chamada)
+
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+
+class TestInserirEncontrosLocalizacoes(unittest.TestCase):
+    """Testes para a função inserir_encontros_localizacoes."""
+
+    def test_inserir_encontros_localizacoes_sucesso(self):
+        """Testa inserção de relacionamentos encontro-localização com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+        mock_cursor.rowcount = 1
+
+        encontros = [
+            {
+                'id': 'enc-1',
+                'localizacoes': [
+                    {
+                        'localizacao_id': 'loc-1',
+                        'periodo_inicio': '2020-01-01T10:00:00Z',
+                        'periodo_fim': '2020-01-03T14:00:00Z'
+                    },
+                    {
+                        'localizacao_id': 'loc-2',
+                        'periodo_inicio': '2020-01-03T15:00:00Z',
+                        'periodo_fim': '2020-01-05T14:00:00Z'
+                    }
+                ]
+            }
+        ]
+
+        resultado = inserir_encontros_localizacoes(mock_conexao, encontros)
+
+        self.assertEqual(resultado, 2)
+        self.assertEqual(mock_cursor.execute.call_count, 2)
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+    def test_inserir_encontros_localizacoes_vazio(self):
+        """Testa inserção com lista vazia de encontros."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        resultado = inserir_encontros_localizacoes(mock_conexao, [])
+
+        self.assertEqual(resultado, 0)
+        mock_cursor.execute.assert_not_called()
+        mock_conexao.commit.assert_called_once()
+
+    def test_inserir_encontros_localizacoes_sem_locations(self):
+        """Testa inserção com encontro sem localizações."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        encontros = [
+            {
+                'id': 'enc-1',
+                'localizacoes': []
+            }
+        ]
+
+        resultado = inserir_encontros_localizacoes(mock_conexao, encontros)
+
+        self.assertEqual(resultado, 0)
+        mock_cursor.execute.assert_not_called()
+        mock_conexao.commit.assert_called_once()
+
+    def test_inserir_encontros_localizacoes_com_fks(self):
+        """Testa que FKs são incluídas no INSERT."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        encontros = [
+            {
+                'id': 'enc-uuid',
+                'localizacoes': [
+                    {
+                        'localizacao_id': 'loc-uuid',
+                        'periodo_inicio': '2020-01-01T10:00:00Z',
+                        'periodo_fim': '2020-01-03T14:00:00Z'
+                    }
+                ]
+            }
+        ]
+
+        inserir_encontros_localizacoes(mock_conexao, encontros)
+
+        call_args = mock_cursor.execute.call_args[0]
+        self.assertEqual(
+            call_args[1],
+            ('enc-uuid', 'loc-uuid', '2020-01-01T10:00:00Z', '2020-01-03T14:00:00Z')
         )
 
 

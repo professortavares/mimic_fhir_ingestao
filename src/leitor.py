@@ -314,3 +314,149 @@ def ler_pacientes(caminho_arquivo):
 
     logger.info(f"Total de pacientes lidos com sucesso: {len(registros)}")
     return registros
+
+
+def extrair_campos_encounter(registro):
+    """
+    Extrai campos de um registro JSON FHIR Encounter.
+
+    Args:
+        registro (dict): Dicionário contendo um registro FHIR Encounter.
+
+    Returns:
+        dict: Dicionário com chaves 'id', 'tipo', 'classe', 'periodo_inicio',
+              'periodo_fim', 'status', 'hospitalizacao_code', 'alta_code',
+              'paciente_id', 'localizacoes'.
+
+    Raises:
+        ValueError: Se algum campo obrigatório estiver ausente.
+    """
+    if 'id' not in registro:
+        raise ValueError("Campo obrigatório ausente: 'id'")
+    if 'subject' not in registro:
+        raise ValueError("Campo obrigatório ausente: 'subject'")
+
+    reference = registro['subject'].get('reference', '')
+    if not reference:
+        raise ValueError("Campo vazio ou inválido: 'subject.reference'")
+
+    paciente_id = reference.split('/')[-1]
+
+    tipo = None
+    if 'type' in registro and isinstance(registro['type'], list) and len(registro['type']) > 0:
+        coding = registro['type'][0].get('coding', [])
+        if coding and len(coding) > 0:
+            tipo = coding[0].get('display', '')
+
+    classe = None
+    if 'class' in registro:
+        classe = registro['class'].get('code', '')
+
+    periodo_inicio = registro.get('period', {}).get('start', None)
+    periodo_fim = registro.get('period', {}).get('end', None)
+
+    status = registro.get('status', None)
+
+    hospitalizacao_code = None
+    if 'hospitalization' in registro:
+        coding = registro['hospitalization'].get('coding', [])
+        if coding and len(coding) > 0:
+            hospitalizacao_code = coding[0].get('code', '')
+
+    alta_code = None
+    if 'dischargeDisposition' in registro:
+        coding = registro['dischargeDisposition'].get('coding', [])
+        if coding and len(coding) > 0:
+            alta_code = coding[0].get('code', '')
+
+    localizacoes = []
+    if 'location' in registro and isinstance(registro['location'], list):
+        for loc in registro['location']:
+            localizacao_id = None
+            loc_periodo_inicio = None
+            loc_periodo_fim = None
+
+            if 'location' in loc:
+                reference = loc['location'].get('reference', '')
+                if reference:
+                    localizacao_id = reference.split('/')[-1]
+
+            if 'period' in loc:
+                loc_periodo_inicio = loc['period'].get('start', None)
+                loc_periodo_fim = loc['period'].get('end', None)
+
+            if localizacao_id:
+                localizacoes.append({
+                    'localizacao_id': localizacao_id,
+                    'periodo_inicio': loc_periodo_inicio,
+                    'periodo_fim': loc_periodo_fim
+                })
+
+    return {
+        'id': registro['id'],
+        'tipo': tipo,
+        'classe': classe,
+        'periodo_inicio': periodo_inicio,
+        'periodo_fim': periodo_fim,
+        'status': status,
+        'hospitalizacao_code': hospitalizacao_code,
+        'alta_code': alta_code,
+        'paciente_id': paciente_id,
+        'localizacoes': localizacoes
+    }
+
+
+def ler_encontros(caminho_arquivo):
+    """
+    Lê arquivo NDJSON.gz e extrai registros de encontros.
+
+    Cada linha do arquivo deve conter um objeto JSON válido representando
+    um encontro (Encounter) FHIR. Linhas com campos obrigatórios ausentes são
+    ignoradas com um aviso de log.
+
+    Args:
+        caminho_arquivo (str): Caminho do arquivo NDJSON.gz.
+
+    Returns:
+        list: Lista de dicionários com chaves 'id', 'tipo', 'classe',
+              'periodo_inicio', 'periodo_fim', 'status', 'hospitalizacao_code',
+              'alta_code', 'paciente_id', 'localizacoes'.
+
+    Raises:
+        FileNotFoundError: Se o arquivo não existe.
+        json.JSONDecodeError: Se uma linha não é JSON válido.
+    """
+    registros = []
+
+    try:
+        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
+            for numero_linha, linha in enumerate(arquivo, start=1):
+                linha = linha.strip()
+                if not linha:
+                    continue
+
+                try:
+                    registro_json = json.loads(linha)
+                    registro_extraido = extrair_campos_encounter(registro_json)
+                    registros.append(registro_extraido)
+                    logger.info(
+                        f"Encontro {numero_linha} lido com sucesso: "
+                        f"id={registro_extraido['id']}"
+                    )
+
+                except ValueError as e:
+                    logger.warning(
+                        f"Encontro {numero_linha} ignorado: {e}"
+                    )
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
+                    )
+                    raise
+
+    except FileNotFoundError as e:
+        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
+        raise
+
+    logger.info(f"Total de encontros lidos com sucesso: {len(registros)}")
+    return registros
