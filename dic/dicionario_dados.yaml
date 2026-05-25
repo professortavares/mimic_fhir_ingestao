@@ -1,0 +1,406 @@
+tabelas:
+- nome: organizacoes
+  descricao: Organizações hospitalares ou de saúde do MIMIC FHIR.
+  colunas:
+  - nome: id
+    descricao: Identificador único do registro.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: null
+    exemplos:
+    - ee172322-118b-5716-abbc-18e4c5437e15
+  - nome: nome
+    descricao: Nome descritivo.
+    tipo: text
+    obrigatorio: true
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - Beth Israel Deaconess Medical Center
+- nome: localizacoes
+  descricao: Localizações físicas (leitos, alas) vinculadas a organizações.
+  colunas:
+  - nome: id
+    descricao: Identificador único do registro.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: null
+    exemplos:
+    - 00e4b7f2-1d93-5521-9dd9-cba8fa9461af
+    - 0483cba3-574b-58e3-a6a1-2eec0f3b707a
+    - 0c8de059-7250-5b94-b98d-0a079b28f06c
+  - nome: nome
+    descricao: Nome descritivo.
+    tipo: text
+    obrigatorio: true
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - Cardiology
+    - Unknown
+    - Coronary Care Unit (CCU)
+  - nome: organizacao_id
+    descricao: Referência à organização associada.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: organizacoes
+    exemplos:
+    - ee172322-118b-5716-abbc-18e4c5437e15
+- nome: pacientes
+  descricao: Pacientes do conjunto de dados MIMIC FHIR.
+  colunas:
+  - nome: id
+    descricao: Identificador único do registro.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: null
+    exemplos:
+    - 0a8eebfd-a352-522e-89f0-1d4a13abdebc
+    - 0c2243d2-987b-5cbd-8eb1-170a80647693
+    - 13df78e7-150e-5eb7-be5f-5f62b2baee87
+  - nome: nome_familia
+    descricao: Sobrenome do paciente.
+    tipo: text
+    obrigatorio: true
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - Patient_10004422
+    - Patient_10001725
+    - Patient_10022281
+  - nome: genero
+    descricao: Gênero do paciente (male, female, etc.).
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - female
+    - male
+  - nome: data_nascimento
+    descricao: Data de nascimento do paciente.
+    tipo: date
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - '2118-05-26'
+    - '2050-02-03'
+    - '2119-06-15'
+  - nome: raca
+    descricao: Raça ou etnia do paciente.
+    tipo: text
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - asked but unknown
+    - White
+    - Black or African American
+  - nome: identificador
+    descricao: 'Identificador externo (ex.: MRN).'
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - '10022880'
+    - '10038081'
+    - '10000032'
+  - nome: idioma
+    descricao: 'Código de idioma preferencial (ex.: en, pt).'
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - en
+  - nome: estado_civil
+    descricao: Estado civil do paciente.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - UNK
+    - M
+    - D
+  - nome: organizacao_id
+    descricao: Referência à organização associada.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: organizacoes
+    exemplos:
+    - ee172322-118b-5716-abbc-18e4c5437e15
+- nome: encontros
+  descricao: Encontros (visitas ou internações) de pacientes.
+  colunas:
+  - nome: id
+    descricao: Identificador único do registro.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: null
+    exemplos:
+    - 0071a339-74cd-596a-9083-771d41d6d118
+    - 00b9b622-9138-5ebf-8cf9-087c37564702
+    - 00d55770-bb49-5d07-b395-43967c41a0b6
+  - nome: tipo
+    descricao: Tipo do encontro.
+    tipo: text
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - Patient encounter procedure
+    - Perc drug-el cor stent sing
+    - Hospital observation per hr
+  - nome: classe
+    descricao: Classe do encontro (IMP, AMB, etc.).
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - EMER
+    - SS
+    - AMB
+  - nome: periodo_inicio
+    descricao: Data e hora de início do período.
+    tipo: timestamp without time zone
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - '2143-03-18T12:34:00'
+    - '2150-06-03T20:12:00'
+    - '2161-04-27T07:15:00'
+  - nome: periodo_fim
+    descricao: Data e hora de fim do período.
+    tipo: timestamp without time zone
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - '2132-05-23T13:01:00'
+    - '2186-09-29T18:05:00'
+    - '2112-12-27T16:24:00'
+  - nome: status
+    descricao: Status do registro.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - finished
+  - nome: hospitalizacao_code
+    descricao: Código da fonte de admissão hospitalar.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - TRANSFER FROM SKILLED NURSING FACILITY
+    - INTERNAL TRANSFER TO OR FROM PSYCH
+    - PROCEDURE SITE
+  - nome: alta_code
+    descricao: Código do destino de alta hospitalar.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - REHAB
+    - PSYCH FACILITY
+    - HOME
+  - nome: paciente_id
+    descricao: Referência ao paciente associado.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: pacientes
+    exemplos:
+    - aeda7084-be35-510e-b171-f00596aed99f
+    - 76202c51-1b9d-5cc2-a7bc-3dfb2ac3ab32
+    - 4c9069e4-486b-53a6-8a49-b8520d49ef7e
+- nome: encontros_localizacoes
+  descricao: Relacionamento entre encontros e localizações com seus períodos.
+  colunas:
+  - nome: encontro_id
+    descricao: Referência ao encontro associado.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: encontros
+    exemplos:
+    - 0071a339-74cd-596a-9083-771d41d6d118
+    - 00b9b622-9138-5ebf-8cf9-087c37564702
+    - 00d55770-bb49-5d07-b395-43967c41a0b6
+  - nome: localizacao_id
+    descricao: Referência à localização associada.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: localizacoes
+    exemplos:
+    - 77b3f959-fa2c-5599-8713-a86815b29a4a
+    - 0483cba3-574b-58e3-a6a1-2eec0f3b707a
+    - 9aaa291e-bf3f-5cab-bae0-799e43da5ad5
+  - nome: periodo_inicio
+    descricao: Data e hora de início do período.
+    tipo: timestamp without time zone
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - '2142-08-03T21:05:58'
+    - '2132-12-15T09:29:01'
+    - '2140-06-18T01:41:00'
+  - nome: periodo_fim
+    descricao: Data e hora de fim do período.
+    tipo: timestamp without time zone
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - '2142-08-03T21:05:58'
+    - '2132-12-15T09:29:01'
+    - '2137-02-09T21:41:52'
+- nome: condicoes
+  descricao: Condições clínicas diagnosticadas em pacientes.
+  colunas:
+  - nome: id
+    descricao: Identificador único do registro.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: null
+    exemplos:
+    - 0002fff8-11c5-5d6d-975a-b926a13bb02b
+    - 0014d847-44bd-5bfa-ac44-f411071c1e72
+    - 001f22d9-6d97-5468-9086-91e73a8318ed
+  - nome: code_system
+    descricao: 'URI do sistema de codificação (ex.: SNOMED, ICD).'
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - http://mimic.mit.edu/fhir/mimic/CodeSystem/mimic-diagnosis-icd10
+    - http://mimic.mit.edu/fhir/mimic/CodeSystem/mimic-diagnosis-icd9
+  - nome: code_value
+    descricao: Código do termo no sistema de codificação.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - V8741
+    - '1968'
+    - C6292
+  - nome: code_display
+    descricao: Descrição legível do código.
+    tipo: text
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - Other specified disorders of arteries and arterioles
+    - Other convulsions
+    - Other, mixed, or unspecified drug abuse, unspecified
+  - nome: paciente_id
+    descricao: Referência ao paciente associado.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: pacientes
+    exemplos:
+    - 9111ccb1-fc93-5599-ab7d-35f1e61d4214
+    - df756e08-6ea8-5d69-b918-67911945f827
+    - f5a99b42-365c-5f7e-bcab-4fa33b3cc88e
+  - nome: encontro_id
+    descricao: Referência ao encontro associado.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: encontros
+    exemplos:
+    - 9f012fdd-ce8e-5d6d-a9cf-e8dda4c93b65
+    - ddfdec3b-1cd3-5016-8055-29f764ca34b3
+    - 03eaf2f1-7bec-5621-a61c-a487fa882f87
+- nome: procedimentos
+  descricao: Procedimentos clínicos realizados em pacientes.
+  colunas:
+  - nome: id
+    descricao: Identificador único do registro.
+    tipo: character varying
+    obrigatorio: true
+    chave_primaria: true
+    chave_estrangeira: null
+    exemplos:
+    - 0014603e-8bcd-568b-89ad-10e5f3b9ca46
+    - 00624c54-3d57-5b7c-ac1a-25008c7e50ab
+    - 007b7aa4-6570-585b-aaf4-fa8b53317d2a
+  - nome: code_value
+    descricao: Código do termo no sistema de codificação.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - 3E0336Z
+    - '9427'
+    - 4A1239Z
+  - nome: code_display
+    descricao: Descrição legível do código.
+    tipo: text
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - Drainage of Cerebral Ventricle with Drainage Device, Open Approach
+    - Excision or destruction of other lesion or tissue of heart, endovascular approach
+    - Rhinoscopy
+  - nome: status
+    descricao: Status do registro.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - completed
+  - nome: performed_date_time
+    descricao: Data e hora em que o procedimento foi realizado.
+    tipo: timestamp without time zone
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: null
+    exemplos:
+    - '2177-03-26T00:00:00'
+    - '2167-11-08T00:00:00'
+    - '2147-04-26T00:00:00'
+  - nome: paciente_id
+    descricao: Referência ao paciente associado.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: pacientes
+    exemplos:
+    - aeda7084-be35-510e-b171-f00596aed99f
+    - 76202c51-1b9d-5cc2-a7bc-3dfb2ac3ab32
+    - 4c9069e4-486b-53a6-8a49-b8520d49ef7e
+  - nome: encontro_id
+    descricao: Referência ao encontro associado.
+    tipo: character varying
+    obrigatorio: false
+    chave_primaria: false
+    chave_estrangeira: encontros
+    exemplos:
+    - 202db44a-2332-54c4-af00-709ac5400e71
+    - 79a30f27-ae01-5c9f-af83-b03e5b076281
+    - 89ec6d79-e48d-5694-8a8e-152e5e5dafe6
