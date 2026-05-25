@@ -1,0 +1,7 @@
+services:
+  app:
+    build: .
+    container_name: mimic_fhir_app
+    env_file: .env
+    volumes:
+      - ./data:/app/data

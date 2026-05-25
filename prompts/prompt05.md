@@ -1,0 +1,1 @@
+Use a skill evoluir-ingestao-fhir para fazer a ingestão do arquivo MimicEncounter.ndjson.gz. Quero os seguintes campos: id, type (display), class (display), period (start), period (end), status, hospitalization (code), dischargeDisposition (code) FK para patient, FK para os diversos location, com seus diversos period (start), period (end), 
