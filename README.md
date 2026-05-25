@@ -94,7 +94,7 @@ Ou via Docker:
 docker compose run --rm app python -m pytest tests/ -v
 ```
 
-Saída esperada (87 testes ao total):
+Saída esperada (130 testes ao total):
 
 ```
 tests/test_leitor.py::TestExtrairCampos::test_extrair_campos_sucesso PASSED
@@ -201,10 +201,12 @@ mimic_fhir_ingestao/
 ├── src/                   # Módulos Python da aplicação
 │   ├── leitor.py          # Módulo para leitura de NDJSON.gz
 │   ├── banco.py           # Módulo para operações com PostgreSQL
+│   ├── dicionario.py      # Módulo para geração do dicionário de dados YAML
 │   └── ingestao.py        # Script principal de ingestão
 ├── tests/                 # Testes da aplicação
 │   ├── test_leitor.py     # Testes do módulo leitor
-│   └── test_banco.py      # Testes do módulo banco
+│   ├── test_banco.py      # Testes do módulo banco
+│   └── test_dicionario.py # Testes do módulo dicionario
 ├── conftest.py            # Configuração de testes (adiciona src ao path)
 ├── entry_point.sh         # Script de entrada do container
 ├── requirements.txt       # Dependências Python
@@ -267,6 +269,18 @@ mimic_fhir_ingestao/
   7. Lê e insere relacionamentos encontro-localização
   8. Lê e insere condições
   9. Lê e insere procedimentos
+  10. Gera dicionário de dados YAML
+
+### `dicionario.py`
+
+**Funções:**
+- `obter_colunas_tabela(conexao, nome_tabela)`: Consulta `information_schema` para obter metadados de colunas (nome, tipo, nullabilidade).
+- `obter_chaves_primarias(conexao, nome_tabela)`: Identifica colunas que compõem a chave primária.
+- `obter_chaves_estrangeiras(conexao, nome_tabela)`: Identifica colunas com FK e suas tabelas de destino.
+- `obter_exemplos_coluna(conexao, nome_tabela, nome_coluna)`: Obtém até 3 valores não-nulos distintos de uma coluna como exemplos (com conversão de datas para ISO 8601).
+- `construir_dicionario(conexao)`: Orquestra a coleta de metadados e exemplos para todas as 7 tabelas, retornando uma estrutura Python pronta para serialização YAML.
+- `salvar_dicionario_yaml(dicionario, caminho_arquivo)`: Serializa o dicionário em YAML e salva no caminho especificado (criando diretórios conforme necessário).
+- `gerar_dicionario(conexao, caminho_arquivo)`: Ponto de entrada público que executa todo o fluxo de geração.
 
 ## Logs
 
@@ -282,6 +296,72 @@ Exemplos:
 - `WARNING`: Avisos sobre dados ausentes
 
 O nível de log pode ser controlado pela variável de ambiente `LOG_LEVEL` (padrão: `INFO`).
+
+## Dicionário de Dados
+
+Ao final de cada ingestão bem-sucedida, o projeto gera automaticamente um **dicionário de dados YAML** documentando a estrutura de todas as tabelas criadas. Este arquivo é salvo em `./dic/dicionario_dados.yaml` e contém:
+
+- **Nome e descrição da tabela**
+- **Para cada coluna**: nome, descrição, tipo PostgreSQL, obrigatoriedade, indicação de chave primária, indicação de chave estrangeira (com tabela referenciada) e **até 3 exemplos de valores reais** extraídos dos dados importados
+
+O dicionário é gerado consultando o `information_schema` do PostgreSQL e amostrando dados reais, garantindo que a documentação reflete a estrutura e os dados efetivamente importados.
+
+**Localização:** `./dic/dicionario_dados.yaml`
+
+**Variável de ambiente:** `CAMINHO_DICIONARIO` (padrão: `./dic/dicionario_dados.yaml`)
+
+**Exemplo de saída YAML:**
+
+```yaml
+tabelas:
+  - nome: organizacoes
+    descricao: Organizações hospitalares ou de saúde do MIMIC FHIR.
+    colunas:
+      - nome: id
+        descricao: Identificador único do registro.
+        tipo: character varying
+        obrigatorio: true
+        chave_primaria: true
+        chave_estrangeira: null
+        exemplos:
+          - ee172322-118b-5716-abbc-18e4c5437e15
+          - af301acc-2208-5c16-af36-8e28a1459c4f
+      - nome: nome
+        descricao: Nome descritivo.
+        tipo: text
+        obrigatorio: true
+        chave_primaria: false
+        chave_estrangeira: null
+        exemplos:
+          - Beth Israel Deaconess Medical Center
+          - Massachusetts General Hospital
+
+  - nome: localizacoes
+    descricao: Localizações físicas (leitos, alas) vinculadas a organizações.
+    colunas:
+      - nome: id
+        descricao: Identificador único do registro.
+        tipo: character varying
+        obrigatorio: true
+        chave_primaria: true
+        chave_estrangeira: null
+        exemplos:
+          - ecbf468a-22ec-5320-8e11-6ebcc918dad5
+      - nome: organizacao_id
+        descricao: Referência à organização associada.
+        tipo: character varying
+        obrigatorio: false
+        chave_primaria: false
+        chave_estrangeira: organizacoes
+        exemplos:
+          - ee172322-118b-5716-abbc-18e4c5437e15
+  
+  # ... outras tabelas ...
+```
+
+**Integração com Docker:**
+
+O diretório `./dic/` é montado como volume no container Docker (`./dic:/app/dic`), garantindo que o arquivo YAML gerado persista após a conclusão da ingestão e seja acessível no host.
 
 ## Idempotência
 
