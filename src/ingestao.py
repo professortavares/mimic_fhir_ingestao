@@ -4,7 +4,14 @@ import logging
 import os
 import sys
 
-from leitor import ler_registros, ler_localizacoes, ler_pacientes, ler_encontros
+from leitor import (
+    ler_registros,
+    ler_localizacoes,
+    ler_pacientes,
+    ler_encontros,
+    ler_condicoes,
+    ler_procedimentos
+)
 from banco import (
     conectar,
     criar_tabela,
@@ -16,7 +23,11 @@ from banco import (
     criar_tabela_encontros,
     inserir_encontros,
     criar_tabela_encontros_localizacoes,
-    inserir_encontros_localizacoes
+    inserir_encontros_localizacoes,
+    criar_tabela_condicoes,
+    inserir_condicoes,
+    criar_tabela_procedimentos,
+    inserir_procedimentos
 )
 
 
@@ -65,11 +76,14 @@ def main():
     1. Configura logging
     2. Lê variáveis de ambiente
     3. Conecta ao banco
-    4. Cria tabelas (organizacoes, localizacoes, pacientes, encontros e encontros_localizacoes)
+    4. Cria tabelas (organizacoes, localizacoes, pacientes, encontros,
+       encontros_localizacoes, condicoes, procedimentos)
     5. Lê e insere registros de organizações
     6. Lê e insere registros de localizações
     7. Lê e insere registros de pacientes
-    8. Lê e insere registros de encontros e seus relacionamentos com localizações
+    8. Lê e insere registros de encontros e seus relacionamentos
+    9. Lê e insere registros de condições
+    10. Lê e insere registros de procedimentos
     """
     log_level = os.getenv('LOG_LEVEL', 'INFO')
     configurar_logging(log_level)
@@ -93,6 +107,14 @@ def main():
         'CAMINHO_ARQUIVO_ENCOUNTER',
         './data/MimicEncounter.ndjson.gz'
     )
+    caminho_arquivo_cond = os.getenv(
+        'CAMINHO_ARQUIVO_CONDITION',
+        './data/MimicCondition.ndjson.gz'
+    )
+    caminho_arquivo_proc = os.getenv(
+        'CAMINHO_ARQUIVO_PROCEDURE',
+        './data/MimicProcedure.ndjson.gz'
+    )
 
     config_banco = obter_configuracao_banco()
     conexao = None
@@ -107,6 +129,8 @@ def main():
         criar_tabela_pacientes(conexao)
         criar_tabela_encontros(conexao)
         criar_tabela_encontros_localizacoes(conexao)
+        criar_tabela_condicoes(conexao)
+        criar_tabela_procedimentos(conexao)
 
         # Ingestão de Organizações
         logger.info(f"Lendo arquivo de organizações: {caminho_arquivo_org}")
@@ -165,6 +189,32 @@ def main():
             )
         else:
             logger.warning("Nenhum registro de encontro válido encontrado")
+
+        # Ingestão de Condições
+        logger.info(f"Lendo arquivo de condições: {caminho_arquivo_cond}")
+        registros_cond = ler_condicoes(caminho_arquivo_cond)
+
+        if registros_cond:
+            total_cond = inserir_condicoes(conexao, registros_cond)
+            logger.info(
+                f"Condições ingeridas com sucesso: "
+                f"{total_cond} registros processados"
+            )
+        else:
+            logger.warning("Nenhum registro de condição válido encontrado")
+
+        # Ingestão de Procedimentos
+        logger.info(f"Lendo arquivo de procedimentos: {caminho_arquivo_proc}")
+        registros_proc = ler_procedimentos(caminho_arquivo_proc)
+
+        if registros_proc:
+            total_proc = inserir_procedimentos(conexao, registros_proc)
+            logger.info(
+                f"Procedimentos ingeridos com sucesso: "
+                f"{total_proc} registros processados"
+            )
+        else:
+            logger.warning("Nenhum registro de procedimento válido encontrado")
 
         logger.info("Ingestão de dados MIMIC FHIR concluída com sucesso")
 

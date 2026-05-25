@@ -1,0 +1,1 @@
+Use a skill /evoluir-ingestao-fhir para fazer a ingestão do arquivo MimicCondition.ndjson.gz. Quero os seguintes campos: id, code (code e display), FK para patient e FK para Encounter
