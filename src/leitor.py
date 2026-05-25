@@ -513,6 +513,114 @@ def extrair_campos_condition(registro):
     }
 
 
+def extrair_campos_procedure(registro):
+    """
+    Extrai campos de um registro JSON FHIR Procedure.
+
+    Args:
+        registro (dict): Dicionário contendo um registro FHIR Procedure.
+
+    Returns:
+        dict: Dicionário com chaves 'id', 'code_value', 'code_display', 'status',
+              'performed_date_time', 'paciente_id', 'encontro_id'.
+
+    Raises:
+        ValueError: Se algum campo obrigatório estiver ausente.
+    """
+    if 'id' not in registro:
+        raise ValueError("Campo obrigatório ausente: 'id'")
+    if 'subject' not in registro:
+        raise ValueError("Campo obrigatório ausente: 'subject'")
+
+    reference = registro['subject'].get('reference', '')
+    if not reference:
+        raise ValueError("Campo vazio ou inválido: 'subject.reference'")
+
+    paciente_id = reference.split('/')[-1]
+
+    encontro_id = None
+    if 'encounter' in registro:
+        reference = registro['encounter'].get('reference', '')
+        if reference:
+            encontro_id = reference.split('/')[-1]
+
+    code_value = None
+    code_display = None
+    if 'code' in registro:
+        coding = registro['code'].get('coding', [])
+        if coding and len(coding) > 0:
+            code_value = coding[0].get('code', '')
+            code_display = coding[0].get('display', '')
+
+    status = registro.get('status', None)
+    performed_date_time = registro.get('performedDateTime', None)
+
+    return {
+        'id': registro['id'],
+        'code_value': code_value,
+        'code_display': code_display,
+        'status': status,
+        'performed_date_time': performed_date_time,
+        'paciente_id': paciente_id,
+        'encontro_id': encontro_id
+    }
+
+
+def ler_procedimentos(caminho_arquivo):
+    """
+    Lê arquivo NDJSON.gz e extrai registros de procedimentos.
+
+    Cada linha do arquivo deve conter um objeto JSON válido representando
+    um procedimento (Procedure) FHIR. Linhas com campos obrigatórios ausentes são
+    ignoradas com um aviso de log.
+
+    Args:
+        caminho_arquivo (str): Caminho do arquivo NDJSON.gz.
+
+    Returns:
+        list: Lista de dicionários com chaves 'id', 'code_value', 'code_display',
+              'status', 'performed_date_time', 'paciente_id', 'encontro_id'.
+
+    Raises:
+        FileNotFoundError: Se o arquivo não existe.
+        json.JSONDecodeError: Se uma linha não é JSON válido.
+    """
+    registros = []
+
+    try:
+        with gzip.open(caminho_arquivo, 'rt', encoding='utf-8') as arquivo:
+            for numero_linha, linha in enumerate(arquivo, start=1):
+                linha = linha.strip()
+                if not linha:
+                    continue
+
+                try:
+                    registro_json = json.loads(linha)
+                    registro_extraido = extrair_campos_procedure(registro_json)
+                    registros.append(registro_extraido)
+                    logger.info(
+                        f"Procedimento {numero_linha} lido com sucesso: "
+                        f"id={registro_extraido['id']}"
+                    )
+
+                except ValueError as e:
+                    logger.warning(
+                        f"Procedimento {numero_linha} ignorado: {e}"
+                    )
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        f"Erro ao fazer parse da linha {numero_linha}: {e}"
+                    )
+                    raise
+
+    except FileNotFoundError as e:
+        logger.error(f"Arquivo não encontrado: {caminho_arquivo}")
+        raise
+
+    logger.info(f"Total de procedimentos lidos com sucesso: {len(registros)}")
+    return registros
+
+
 def ler_condicoes(caminho_arquivo):
     """
     Lê arquivo NDJSON.gz e extrai registros de condições.

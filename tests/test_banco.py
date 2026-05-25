@@ -15,7 +15,9 @@ from banco import (
     criar_tabela_encontros_localizacoes,
     inserir_encontros_localizacoes,
     criar_tabela_condicoes,
-    inserir_condicoes
+    inserir_condicoes,
+    criar_tabela_procedimentos,
+    inserir_procedimentos
 )
 
 
@@ -588,6 +590,114 @@ class TestCriarTabelaCondicoes(unittest.TestCase):
 
         mock_conexao.commit.assert_called_once()
         mock_cursor.close.assert_called_once()
+
+
+class TestCriarTabelaProcedimentos(unittest.TestCase):
+    """Testes para a função criar_tabela_procedimentos."""
+
+    def test_criar_tabela_procedimentos_sucesso(self):
+        """Testa criação de tabela procedimentos com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        criar_tabela_procedimentos(mock_conexao)
+
+        mock_cursor.execute.assert_called_once()
+        sql_chamada = mock_cursor.execute.call_args[0][0]
+        self.assertIn('CREATE TABLE IF NOT EXISTS procedimentos',
+                      sql_chamada)
+        self.assertIn('id VARCHAR(255) PRIMARY KEY', sql_chamada)
+        self.assertIn('code_value VARCHAR(100)', sql_chamada)
+        self.assertIn('code_display TEXT', sql_chamada)
+        self.assertIn('status VARCHAR(50)', sql_chamada)
+        self.assertIn('performed_date_time TIMESTAMP', sql_chamada)
+        self.assertIn('paciente_id VARCHAR(255) REFERENCES pacientes(id)',
+                      sql_chamada)
+        self.assertIn('encontro_id VARCHAR(255) REFERENCES encontros(id)',
+                      sql_chamada)
+
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+
+class TestInserirProcedimentos(unittest.TestCase):
+    """Testes para a função inserir_procedimentos."""
+
+    def test_inserir_procedimentos_sucesso(self):
+        """Testa inserção de registros de procedimentos com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+        mock_cursor.rowcount = 1
+
+        registros = [
+            {
+                'id': 'proc-1',
+                'code_value': '5491',
+                'code_display': 'Percutaneous abdominal drainage',
+                'status': 'completed',
+                'performed_date_time': '2180-06-27T00:00:00-04:00',
+                'paciente_id': 'pat-1',
+                'encontro_id': 'enc-1'
+            },
+            {
+                'id': 'proc-2',
+                'code_value': '5492',
+                'code_display': 'Another procedure',
+                'status': 'completed',
+                'performed_date_time': '2180-06-28T00:00:00-04:00',
+                'paciente_id': 'pat-2',
+                'encontro_id': None
+            }
+        ]
+
+        resultado = inserir_procedimentos(mock_conexao, registros)
+
+        self.assertEqual(resultado, 2)
+        self.assertEqual(mock_cursor.execute.call_count, 2)
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+    def test_inserir_procedimentos_vazio(self):
+        """Testa inserção com lista vazia de registros."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        resultado = inserir_procedimentos(mock_conexao, [])
+
+        self.assertEqual(resultado, 0)
+        mock_cursor.execute.assert_not_called()
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+    def test_inserir_procedimentos_com_fk(self):
+        """Testa que FKs são incluídas no INSERT."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        registros = [
+            {
+                'id': 'proc-uuid',
+                'code_value': 'code-123',
+                'code_display': 'Test Procedure',
+                'status': 'completed',
+                'performed_date_time': '2180-06-27T00:00:00-04:00',
+                'paciente_id': 'pat-uuid',
+                'encontro_id': 'enc-uuid'
+            }
+        ]
+
+        inserir_procedimentos(mock_conexao, registros)
+
+        call_args = mock_cursor.execute.call_args[0]
+        self.assertEqual(
+            call_args[1],
+            ('proc-uuid', 'code-123', 'Test Procedure', 'completed',
+             '2180-06-27T00:00:00-04:00', 'pat-uuid', 'enc-uuid')
+        )
 
 
 class TestInserirCondicoes(unittest.TestCase):

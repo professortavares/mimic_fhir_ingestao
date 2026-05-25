@@ -16,7 +16,9 @@ from leitor import (
     extrair_campos_encounter,
     ler_encontros,
     extrair_campos_condition,
-    ler_condicoes
+    ler_condicoes,
+    extrair_campos_procedure,
+    ler_procedimentos
 )
 
 
@@ -838,6 +840,196 @@ class TestExtrairCamposCondition(unittest.TestCase):
         resultado = extrair_campos_condition(registro)
 
         self.assertEqual(resultado['encontro_id'], 'encounter-uuid-67890')
+
+
+class TestExtrairCamposProcedure(unittest.TestCase):
+    """Testes para a função extrair_campos_procedure."""
+
+    def test_extrair_campos_procedure_sucesso(self):
+        """Testa extração bem-sucedida de um procedimento."""
+        registro = {
+            'id': 'proc-1',
+            'subject': {'reference': 'Patient/pat-1'},
+            'encounter': {'reference': 'Encounter/enc-1'},
+            'code': {
+                'coding': [
+                    {
+                        'code': '5491',
+                        'display': 'Percutaneous abdominal drainage'
+                    }
+                ]
+            },
+            'status': 'completed',
+            'performedDateTime': '2180-06-27T00:00:00-04:00'
+        }
+
+        resultado = extrair_campos_procedure(registro)
+
+        self.assertEqual(resultado['id'], 'proc-1')
+        self.assertEqual(resultado['paciente_id'], 'pat-1')
+        self.assertEqual(resultado['encontro_id'], 'enc-1')
+        self.assertEqual(resultado['code_value'], '5491')
+        self.assertEqual(
+            resultado['code_display'],
+            'Percutaneous abdominal drainage'
+        )
+        self.assertEqual(resultado['status'], 'completed')
+        self.assertEqual(
+            resultado['performed_date_time'],
+            '2180-06-27T00:00:00-04:00'
+        )
+
+    def test_extrair_campos_procedure_sem_id(self):
+        """Testa que ValueError é levantado se 'id' está ausente."""
+        registro = {
+            'subject': {'reference': 'Patient/pat-1'}
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_procedure(registro)
+
+        self.assertIn('id', str(contexto.exception))
+
+    def test_extrair_campos_procedure_sem_subject(self):
+        """Testa que ValueError é levantado se 'subject' está ausente."""
+        registro = {
+            'id': 'proc-1'
+        }
+
+        with self.assertRaises(ValueError) as contexto:
+            extrair_campos_procedure(registro)
+
+        self.assertIn('subject', str(contexto.exception))
+
+    def test_extrair_campos_procedure_encontro_opcional(self):
+        """Testa que encontro_id é None se encounter está ausente."""
+        registro = {
+            'id': 'proc-2',
+            'subject': {'reference': 'Patient/pat-2'},
+            'code': {
+                'coding': [
+                    {
+                        'code': '5491',
+                        'display': 'Some procedure'
+                    }
+                ]
+            },
+            'status': 'completed',
+            'performedDateTime': '2180-06-27T00:00:00-04:00'
+        }
+
+        resultado = extrair_campos_procedure(registro)
+
+        self.assertEqual(resultado['id'], 'proc-2')
+        self.assertIsNone(resultado['encontro_id'])
+
+    def test_extrair_campos_procedure_campos_opcionais(self):
+        """Testa que campos opcionais são None se ausentes."""
+        registro = {
+            'id': 'proc-3',
+            'subject': {'reference': 'Patient/pat-3'}
+        }
+
+        resultado = extrair_campos_procedure(registro)
+
+        self.assertIsNone(resultado['code_value'])
+        self.assertIsNone(resultado['code_display'])
+        self.assertIsNone(resultado['status'])
+        self.assertIsNone(resultado['performed_date_time'])
+
+
+class TestLerProcedimentos(unittest.TestCase):
+    """Testes para a função ler_procedimentos."""
+
+    def test_ler_procedimentos_sucesso(self):
+        """Testa leitura bem-sucedida de arquivo NDJSON.gz."""
+        dados = [
+            {
+                'id': 'proc-1',
+                'subject': {'reference': 'Patient/pat-1'},
+                'encounter': {'reference': 'Encounter/enc-1'},
+                'code': {
+                    'coding': [
+                        {
+                            'code': '5491',
+                            'display': 'Percutaneous abdominal drainage'
+                        }
+                    ]
+                },
+                'status': 'completed',
+                'performedDateTime': '2180-06-27T00:00:00-04:00'
+            },
+            {
+                'id': 'proc-2',
+                'subject': {'reference': 'Patient/pat-2'},
+                'code': {
+                    'coding': [
+                        {
+                            'code': '5492',
+                            'display': 'Another procedure'
+                        }
+                    ]
+                },
+                'status': 'completed',
+                'performedDateTime': '2180-06-28T00:00:00-04:00'
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.ndjson.gz',
+                                         delete=False) as tmp:
+            with gzip.open(tmp.name, 'wt', encoding='utf-8') as gz:
+                for registro in dados:
+                    gz.write(json.dumps(registro) + '\n')
+
+            try:
+                resultado = ler_procedimentos(tmp.name)
+
+                self.assertEqual(len(resultado), 2)
+                self.assertEqual(resultado[0]['id'], 'proc-1')
+                self.assertEqual(resultado[0]['code_value'], '5491')
+                self.assertEqual(resultado[1]['id'], 'proc-2')
+
+            finally:
+                import os
+                os.unlink(tmp.name)
+
+    def test_ler_procedimentos_arquivo_nao_encontrado(self):
+        """Testa que FileNotFoundError é levantado para arquivo inexistente."""
+        with self.assertRaises(FileNotFoundError):
+            ler_procedimentos('./data/arquivo_inexistente.ndjson.gz')
+
+    def test_ler_procedimentos_campos_ausentes(self):
+        """Testa que registros com campos obrigatórios ausentes são ignorados."""
+        dados = [
+            {
+                'id': 'proc-1',
+                'subject': {'reference': 'Patient/pat-1'}
+            },
+            {
+                'subject': {'reference': 'Patient/pat-2'}
+            },
+            {
+                'id': 'proc-3',
+                'subject': {'reference': 'Patient/pat-3'}
+            }
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.ndjson.gz',
+                                         delete=False) as tmp:
+            with gzip.open(tmp.name, 'wt', encoding='utf-8') as gz:
+                for registro in dados:
+                    gz.write(json.dumps(registro) + '\n')
+
+            try:
+                resultado = ler_procedimentos(tmp.name)
+
+                self.assertEqual(len(resultado), 2)
+                self.assertEqual(resultado[0]['id'], 'proc-1')
+                self.assertEqual(resultado[1]['id'], 'proc-3')
+
+            finally:
+                import os
+                os.unlink(tmp.name)
 
 
 class TestLerCondicoes(unittest.TestCase):
