@@ -7,6 +7,7 @@ Projeto Python para importar dados do MIMIC versão FHIR a partir de arquivos ND
 Este projeto realiza a ingestão de registros FHIR do MIMIC (Medical Information Mart for Intensive Care) em um banco PostgreSQL. Atualmente, importa:
 - **Organizações** (`MimicOrganization.ndjson.gz`): extraindo `id` e `name` para a tabela `organizacoes`
 - **Localizações** (`MimicLocation.ndjson.gz`): extraindo `id`, `name` e FK para `organizacoes` na tabela `localizacoes`
+- **Pacientes** (`MimicPatient.ndjson.gz`): extraindo `id`, `name (family)`, `gender`, `birthDate`, `race`, `identifier`, `language`, `maritalStatus` e FK para `organizacoes` na tabela `pacientes`
 
 ## Pré-requisitos
 
@@ -41,6 +42,7 @@ POSTGRES_PASSWORD=sua_senha
 LOG_LEVEL=INFO
 CAMINHO_ARQUIVO=./data/MimicOrganization.ndjson.gz
 CAMINHO_ARQUIVO_LOCATION=./data/MimicLocation.ndjson.gz
+CAMINHO_ARQUIVO_PATIENT=./data/MimicPatient.ndjson.gz
 ```
 
 ### 3. Executar a ingestão
@@ -66,6 +68,8 @@ mimic_fhir_app | 2026-05-23 10:30:45,456 - leitor - INFO - Registro 1 lido com s
 mimic_fhir_app | 2026-05-23 10:30:45,567 - banco - INFO - Registro inserido: id=ee172322-118b-5716-abbc-18e4c5437e15, nome=Beth Israel Deaconess Medical Center
 mimic_fhir_app | 2026-05-23 10:30:45,678 - ingestao - INFO - Lendo arquivo de localizações: ./data/MimicLocation.ndjson.gz
 mimic_fhir_app | 2026-05-23 10:30:45,789 - leitor - INFO - Localização 1 lida com sucesso: id=ecbf468a-22ec-5320-8e11-6ebcc918dad5
+mimic_fhir_app | 2026-05-23 10:30:45,890 - ingestao - INFO - Lendo arquivo de pacientes: ./data/MimicPatient.ndjson.gz
+mimic_fhir_app | 2026-05-23 10:30:46,001 - leitor - INFO - Paciente 1 lido com sucesso: id=pat-12345
 mimic_fhir_app | 2026-05-23 10:30:46,012 - ingestao - INFO - Ingestão de dados MIMIC FHIR concluída com sucesso
 ```
 
@@ -84,7 +88,7 @@ Ou via Docker:
 docker compose run --rm app python -m pytest tests/ -v
 ```
 
-Saída esperada (27 testes ao total):
+Saída esperada (40 testes ao total):
 
 ```
 tests/test_leitor.py::TestExtrairCampos::test_extrair_campos_sucesso PASSED
@@ -105,6 +109,16 @@ tests/test_leitor.py::TestExtrairCamposLocation::test_extrair_campos_location_ex
 tests/test_leitor.py::TestLerLocalizacoes::test_ler_localizacoes_sucesso PASSED
 tests/test_leitor.py::TestLerLocalizacoes::test_ler_localizacoes_arquivo_nao_encontrado PASSED
 tests/test_leitor.py::TestLerLocalizacoes::test_ler_localizacoes_campos_ausentes PASSED
+tests/test_leitor.py::TestExtrairCamposPatient::test_extrair_campos_patient_sucesso PASSED
+tests/test_leitor.py::TestExtrairCamposPatient::test_extrair_campos_patient_sem_id PASSED
+tests/test_leitor.py::TestExtrairCamposPatient::test_extrair_campos_patient_sem_gender PASSED
+tests/test_leitor.py::TestExtrairCamposPatient::test_extrair_campos_patient_sem_name PASSED
+tests/test_leitor.py::TestExtrairCamposPatient::test_extrair_campos_patient_name_vazio PASSED
+tests/test_leitor.py::TestExtrairCamposPatient::test_extrair_campos_patient_campos_opcionais_none PASSED
+tests/test_leitor.py::TestExtrairCamposPatient::test_extrair_campos_patient_extrai_uuid_org_corretamente PASSED
+tests/test_leitor.py::TestLerPacientes::test_ler_pacientes_sucesso PASSED
+tests/test_leitor.py::TestLerPacientes::test_ler_pacientes_arquivo_nao_encontrado PASSED
+tests/test_leitor.py::TestLerPacientes::test_ler_pacientes_campos_ausentes PASSED
 tests/test_banco.py::TestConectar::test_conectar_sucesso PASSED
 tests/test_banco.py::TestConectar::test_conectar_falha PASSED
 tests/test_banco.py::TestCriarTabela::test_criar_tabela_sucesso PASSED
@@ -114,6 +128,10 @@ tests/test_banco.py::TestCriarTabelaLocalizacoes::test_criar_tabela_localizacoes
 tests/test_banco.py::TestInserirLocalizacoes::test_inserir_localizacoes_sucesso PASSED
 tests/test_banco.py::TestInserirLocalizacoes::test_inserir_localizacoes_vazio PASSED
 tests/test_banco.py::TestInserirLocalizacoes::test_inserir_localizacoes_com_fk PASSED
+tests/test_banco.py::TestCriarTabelaPacientes::test_criar_tabela_pacientes_sucesso PASSED
+tests/test_banco.py::TestInserirPacientes::test_inserir_pacientes_sucesso PASSED
+tests/test_banco.py::TestInserirPacientes::test_inserir_pacientes_vazio PASSED
+tests/test_banco.py::TestInserirPacientes::test_inserir_pacientes_com_fk PASSED
 ```
 
 ## Parar o serviço
@@ -153,6 +171,8 @@ mimic_fhir_ingestao/
 - `ler_registros(caminho_arquivo)`: Lê arquivo NDJSON.gz de organizações e retorna lista de registros.
 - `extrair_campos_location(registro)`: Extrai `id`, `name` e `organizacao_id` (FK) de um registro FHIR Location.
 - `ler_localizacoes(caminho_arquivo)`: Lê arquivo NDJSON.gz de localizações e retorna lista de registros.
+- `extrair_campos_patient(registro)`: Extrai `id`, `nome_familia`, `genero`, `data_nascimento`, `raca`, `identificador`, `idioma`, `estado_civil` e `organizacao_id` (FK) de um registro FHIR Patient.
+- `ler_pacientes(caminho_arquivo)`: Lê arquivo NDJSON.gz de pacientes e retorna lista de registros.
 
 ### `banco.py`
 
@@ -162,6 +182,8 @@ mimic_fhir_ingestao/
 - `inserir_organizacoes(conexao, registros)`: Insere registros de organizações (ignora duplicatas).
 - `criar_tabela_localizacoes(conexao)`: Cria tabela `localizacoes` com FK para `organizacoes`.
 - `inserir_localizacoes(conexao, registros)`: Insere registros de localizações (ignora duplicatas).
+- `criar_tabela_pacientes(conexao)`: Cria tabela `pacientes` com FK para `organizacoes`.
+- `inserir_pacientes(conexao, registros)`: Insere registros de pacientes (ignora duplicatas).
 
 ### `ingestao.py`
 
@@ -170,9 +192,10 @@ mimic_fhir_ingestao/
 - `obter_configuracao_banco()`: Obtém config do banco de variáveis de ambiente.
 - `main()`: Orquestra o fluxo completo:
   1. Conecta ao banco de dados
-  2. Cria tabelas (organizacoes e localizacoes)
+  2. Cria tabelas (organizacoes, localizacoes e pacientes)
   3. Lê e insere organizações
   4. Lê e insere localizações
+  5. Lê e insere pacientes
 
 ## Logs
 
@@ -235,11 +258,71 @@ Estrutura esperada:
 
 Campos extraídos: `id`, `name`, e `organizacao_id` (extraído de `managingOrganization.reference`)
 
+### `MimicPatient.ndjson.gz`
+Cada linha é um registro FHIR Patient em JSON.
+
+Estrutura esperada:
+
+```json
+{
+  "id": "pat-12345",
+  "gender": "male",
+  "name": [
+    {
+      "family": "Silva"
+    }
+  ],
+  "birthDate": "1980-01-01",
+  "resourceType": "Patient",
+  "managingOrganization": {
+    "reference": "Organization/ee172322-118b-5716-abbc-18e4c5437e15"
+  },
+  "identifier": [
+    {
+      "value": "ID123"
+    }
+  ],
+  "extension": [
+    {
+      "url": "http://example.com/race",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "display": "White"
+          }
+        ]
+      }
+    }
+  ],
+  "communication": [
+    {
+      "language": {
+        "coding": [
+          {
+            "code": "en"
+          }
+        ]
+      }
+    }
+  ],
+  "maritalStatus": {
+    "coding": [
+      {
+        "code": "M"
+      }
+    ]
+  },
+  ...
+}
+```
+
+Campos extraídos: `id`, `name[0].family`, `gender`, `birthDate`, `race` (de `extension[*].valueCodeableConcept.coding[0].display`), `identifier[0].value`, `language[0].language.coding[0].code`, `maritalStatus.coding[0].code`, e `organizacao_id` (extraído de `managingOrganization.reference`)
+
 ## Troubleshooting
 
 ### Erro "arquivo não encontrado"
 
-Certifique-se de que ambos os arquivos existem em `./data/`:
+Certifique-se de que os arquivos existem em `./data/`:
 
 ```bash
 ls -la data/
@@ -248,6 +331,7 @@ ls -la data/
 Você deve ver:
 - `MimicOrganization.ndjson.gz`
 - `MimicLocation.ndjson.gz`
+- `MimicPatient.ndjson.gz`
 
 Note: os arquivos `.gz` são ignorados pelo git (`.gitignore`) e precisam estar presentes localmente para o docker-compose montar o volume.
 

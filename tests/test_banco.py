@@ -7,7 +7,9 @@ from banco import (
     criar_tabela,
     inserir_organizacoes,
     criar_tabela_localizacoes,
-    inserir_localizacoes
+    inserir_localizacoes,
+    criar_tabela_pacientes,
+    inserir_pacientes
 )
 
 
@@ -200,6 +202,119 @@ class TestInserirLocalizacoes(unittest.TestCase):
         # Verifica que execute foi chamado com 3 valores (id, nome, organizacao_id)
         call_args = mock_cursor.execute.call_args[0]
         self.assertEqual(call_args[1], ('loc-uuid', 'Test Location', 'org-uuid'))
+
+
+class TestCriarTabelaPacientes(unittest.TestCase):
+    """Testes para a função criar_tabela_pacientes."""
+
+    def test_criar_tabela_pacientes_sucesso(self):
+        """Testa criação de tabela pacientes com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        criar_tabela_pacientes(mock_conexao)
+
+        mock_cursor.execute.assert_called_once()
+        # Verifica se o SQL contém as partes esperadas
+        sql_chamada = mock_cursor.execute.call_args[0][0]
+        self.assertIn('CREATE TABLE IF NOT EXISTS pacientes', sql_chamada)
+        self.assertIn('id VARCHAR(255) PRIMARY KEY', sql_chamada)
+        self.assertIn('nome_familia TEXT NOT NULL', sql_chamada)
+        self.assertIn('genero VARCHAR(50)', sql_chamada)
+        self.assertIn('data_nascimento DATE', sql_chamada)
+        self.assertIn('raca TEXT', sql_chamada)
+        self.assertIn('identificador VARCHAR(255)', sql_chamada)
+        self.assertIn('idioma VARCHAR(10)', sql_chamada)
+        self.assertIn('estado_civil VARCHAR(50)', sql_chamada)
+        self.assertIn('organizacao_id VARCHAR(255) REFERENCES organizacoes(id)', sql_chamada)
+
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+
+class TestInserirPacientes(unittest.TestCase):
+    """Testes para a função inserir_pacientes."""
+
+    def test_inserir_pacientes_sucesso(self):
+        """Testa inserção de registros de pacientes com sucesso."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+        mock_cursor.rowcount = 1
+
+        registros = [
+            {
+                'id': 'pat-1',
+                'nome_familia': 'Silva',
+                'genero': 'male',
+                'data_nascimento': '1980-01-01',
+                'raca': 'White',
+                'identificador': 'ID123',
+                'idioma': 'en',
+                'estado_civil': 'M',
+                'organizacao_id': 'org-1'
+            },
+            {
+                'id': 'pat-2',
+                'nome_familia': 'Santos',
+                'genero': 'female',
+                'data_nascimento': '1985-05-15',
+                'raca': 'Black',
+                'identificador': 'ID456',
+                'idioma': 'pt',
+                'estado_civil': 'S',
+                'organizacao_id': 'org-1'
+            }
+        ]
+
+        resultado = inserir_pacientes(mock_conexao, registros)
+
+        self.assertEqual(resultado, 2)
+        self.assertEqual(mock_cursor.execute.call_count, 2)
+        mock_conexao.commit.assert_called_once()
+        mock_cursor.close.assert_called_once()
+
+    def test_inserir_pacientes_vazio(self):
+        """Testa inserção com lista vazia."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        resultado = inserir_pacientes(mock_conexao, [])
+
+        self.assertEqual(resultado, 0)
+        mock_cursor.execute.assert_not_called()
+        mock_conexao.commit.assert_called_once()
+
+    def test_inserir_pacientes_com_fk(self):
+        """Testa que FK é incluída no INSERT."""
+        mock_conexao = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conexao.cursor.return_value = mock_cursor
+
+        registros = [
+            {
+                'id': 'pat-uuid',
+                'nome_familia': 'Test',
+                'genero': 'male',
+                'data_nascimento': '1990-01-01',
+                'raca': None,
+                'identificador': None,
+                'idioma': None,
+                'estado_civil': None,
+                'organizacao_id': 'org-uuid'
+            }
+        ]
+
+        inserir_pacientes(mock_conexao, registros)
+
+        # Verifica que execute foi chamado com 9 valores
+        call_args = mock_cursor.execute.call_args[0]
+        self.assertEqual(
+            call_args[1],
+            ('pat-uuid', 'Test', 'male', '1990-01-01', None, None, None, None, 'org-uuid')
+        )
 
 
 if __name__ == '__main__':

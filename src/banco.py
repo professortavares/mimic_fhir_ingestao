@@ -226,3 +226,120 @@ def inserir_localizacoes(conexao, registros):
         cursor.close()
 
     return contador
+
+
+def criar_tabela_pacientes(conexao):
+    """
+    Cria tabela 'pacientes' se não existir.
+
+    A tabela possui colunas:
+    - id: VARCHAR(255), chave primária
+    - nome_familia: TEXT, obrigatório
+    - genero: VARCHAR(50)
+    - data_nascimento: DATE
+    - raca: TEXT
+    - identificador: VARCHAR(255)
+    - idioma: VARCHAR(10)
+    - estado_civil: VARCHAR(50)
+    - organizacao_id: VARCHAR(255), chave estrangeira referenciando organizacoes
+
+    Args:
+        conexao (psycopg2.connection): Conexão com o banco.
+
+    Raises:
+        psycopg2.Error: Se o comando SQL falhar.
+    """
+    sql = """
+    CREATE TABLE IF NOT EXISTS pacientes (
+        id VARCHAR(255) PRIMARY KEY,
+        nome_familia TEXT NOT NULL,
+        genero VARCHAR(50),
+        data_nascimento DATE,
+        raca TEXT,
+        identificador VARCHAR(255),
+        idioma VARCHAR(10),
+        estado_civil VARCHAR(50),
+        organizacao_id VARCHAR(255) REFERENCES organizacoes(id)
+    )
+    """
+
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(sql)
+        conexao.commit()
+        logger.info("Tabela 'pacientes' criada ou já existe")
+
+    except psycopg2.Error as e:
+        logger.error(f"Erro ao criar tabela: {e}")
+        conexao.rollback()
+        raise
+
+    finally:
+        cursor.close()
+
+
+def inserir_pacientes(conexao, registros):
+    """
+    Insere registros de pacientes na tabela.
+
+    Usa INSERT ... ON CONFLICT para garantir idempotência:
+    se um registro com mesmo 'id' já existe, é ignorado.
+
+    Args:
+        conexao (psycopg2.connection): Conexão com o banco.
+        registros (list): Lista de dicionários com campos de paciente.
+
+    Returns:
+        int: Número de registros processados.
+
+    Raises:
+        psycopg2.Error: Se algum INSERT falhar.
+    """
+    sql = """
+    INSERT INTO pacientes (id, nome_familia, genero, data_nascimento, raca,
+                          identificador, idioma, estado_civil, organizacao_id)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO NOTHING
+    """
+
+    contador = 0
+
+    try:
+        cursor = conexao.cursor()
+
+        for registro in registros:
+            try:
+                cursor.execute(
+                    sql,
+                    (
+                        registro['id'],
+                        registro['nome_familia'],
+                        registro['genero'],
+                        registro['data_nascimento'],
+                        registro['raca'],
+                        registro['identificador'],
+                        registro['idioma'],
+                        registro['estado_civil'],
+                        registro['organizacao_id']
+                    )
+                )
+                contador += 1
+                logger.info(
+                    f"Paciente inserido: id={registro['id']}, "
+                    f"nome_familia={registro['nome_familia']}"
+                )
+
+            except psycopg2.Error as e:
+                logger.error(
+                    f"Erro ao inserir paciente {registro['id']}: {e}"
+                )
+                conexao.rollback()
+                raise
+
+        conexao.commit()
+        logger.info(f"Total de pacientes processados: {contador}")
+
+    finally:
+        cursor.close()
+
+    return contador
