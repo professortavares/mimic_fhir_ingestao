@@ -29,6 +29,7 @@ from banco import (
     criar_tabela_procedimentos,
     inserir_procedimentos
 )
+from dicionario import gerar_dicionario
 
 
 def configurar_logging(nivel='INFO'):
@@ -84,6 +85,7 @@ def main():
     8. Lê e insere registros de encontros e seus relacionamentos
     9. Lê e insere registros de condições
     10. Lê e insere registros de procedimentos
+    11. Gera dicionário de dados YAML (gerar_dicionario)
     """
     log_level = os.getenv('LOG_LEVEL', 'INFO')
     configurar_logging(log_level)
@@ -114,6 +116,10 @@ def main():
     caminho_arquivo_proc = os.getenv(
         'CAMINHO_ARQUIVO_PROCEDURE',
         './data/MimicProcedure.ndjson.gz'
+    )
+    caminho_dicionario = os.getenv(
+        'CAMINHO_DICIONARIO',
+        './dic/dicionario_dados.yaml'
     )
 
     config_banco = obter_configuracao_banco()
@@ -217,6 +223,9 @@ def main():
             logger.warning("Nenhum registro de procedimento válido encontrado")
 
         logger.info("Ingestão de dados MIMIC FHIR concluída com sucesso")
+
+        # Geração do dicionário de dados
+        gerar_dicionario(conexao, caminho_dicionario)
 
     except FileNotFoundError as e:
         logger.error(f"Arquivo não encontrado: {e}")
